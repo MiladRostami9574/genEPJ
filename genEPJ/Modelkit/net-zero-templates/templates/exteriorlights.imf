@@ -1,0 +1,44 @@
+<%#INITIALIZE
+parameter "ext_light_w"
+
+parameter "schedule_ext_lights", :default=>
+
+"
+  Through: 12/31,
+  For: AllDays,
+  Until: 12:00, 0,
+  Until: 23:00, 1,
+  Until: 24:00, 0;
+"
+
+
+parameter "name", :default=>'ExteriorLights' # "ExteriorLights" | "ParkingLot" | etc
+parameter "control_option", :default=>'ASTRONOMICALCLOCK'
+
+
+%>
+
+<%#
+Adds exterior lighting. It is recommended to use the accompandied schedule
+as most exterior lighting is "photocell on, time clock off"
+The AstronomicalClock option only overrides the schedule to turn lights off,
+it does not turn them on. The only reason not to use this
+option would be if you want to have exterior lights on during the daylight hours.
+AstronomicalClock and ScheduleNameOnly are actual EnergyPlus input names and
+should not be changed.
+"Time clock off" times can be dictated by local codes. A best practice would be
+1 hr after business close.
+Possible future feature: Motion sensors with full off or half power options.
+%>
+
+Exterior:Lights,
+  <%= name %>,             !- Name
+  <%= name %> Schedule,                !- Schedule Name
+  <%= ext_light_w %>,     !- Design Level {W}
+  <%= control_option %>,   !- Control Option - AstronomicalClock or ScheduleNameOnly(default)-AstronomicalClock overrides schedule above
+  Exterior Lights;         !- End-Use Subcategory
+
+Schedule:Compact,
+  <%= name %> Schedule,    !- Name
+  Fraction,                !- Schedule Type Limits Name
+<%= schedule_ext_lights %> !- Schedule

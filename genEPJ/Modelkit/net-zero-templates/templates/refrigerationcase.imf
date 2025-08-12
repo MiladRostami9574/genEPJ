@@ -1,0 +1,844 @@
+<%#INITIALIZE
+parameter "case_zone"
+parameter "case_name"
+parameter "case_type"
+parameter "case_cap"
+parameter "case_length"
+parameter "case_fan_power"
+parameter "case_light_power"
+parameter "case_defrost_power"
+
+# Lighting
+parameter "lighting_schedule", :default=>
+"
+  Through: 12/31,
+  For: WinterDesignDays,
+  Until: 24:00, 0.00,
+  For: SummerDesignDays,
+  Until: 24:00, 1.00,
+  For: AllOtherDays,
+  Until: 02:00, 0.10,
+  Until: 04:00, 0.50,
+  Until: 19:00, 1.00,
+  Until: 20:00, 0.50,
+  Until: 24:00, 0.10;
+"
+
+%>
+
+<% case_name = case_zone + ' ' + case_name %>
+Schedule:Compact,
+  <%= case_name %> Case Light Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= lighting_schedule %>
+
+Schedule:Constant,
+  <%= case_name %> Case Availability Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  1.0;                     !- Hourly Value
+
+<% if (case_type == "other walk in cooler") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.88,                   !- Rated Ambient Temperature {C}
+  55.0,                    !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.1,                     !- Rated Latent Heat Ratio
+  0.4,                     !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  2.2,                     !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1,                       !- Fraction of Lighting Energy to Case
+  0.0,                     !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0,                     !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  None,                    !- Anti-Sweat Heater Control Type
+  0.0,                     !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  0.0,                     !- Case Height {m}
+  0.0,                     !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  NONE,                    !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  None,                    !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0,                     !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch,  !- Refrigerated Case Restocking Schedule Name
+  <%= case_name %> Credit Sch;  !- Case Credit Fraction Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.020376,                !- Coefficient1 Constant
+  0.00024378,              !- Coefficient2 x
+  0.0000114,               !- Coefficient3 x**2
+  0.0000001811,            !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:20, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:20, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:30, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:30, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For: Tuesday Friday,     !- Field 2
+  Until: 4:00, 0.0,        !- Field 4
+  Until: 5:00, 725.0,      !- Field 6
+  Until: 6:00, 417.0,      !- Field 8
+  Until: 7:00, 290.0,      !- Field 10
+  Until: 24:00, 0.0,       !- Field 12
+  For: AllOtherDays,       !- Field 13
+  Until: 4:00, 0.0,        !- Field 15
+  Until: 5:00, 125.0,      !- Field 17
+  Until: 6:00, 117.0,      !- Field 19
+  Until: 7:00, 90.0,       !- Field 21
+  Until: 19:00, 0.0,       !- Field 23
+  Until: 20:00, 125.0,     !- Field 25
+  Until: 21:00, 117.0,     !- Field 27
+  Until: 22:00, 90.0,      !- Field 29
+  Until: 24:00, 0.0;       !- Field 31
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.6,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "multideck deli cases") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.88,                   !- Rated Ambient Temperature {C}
+  55.0,                    !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.3000,                  !- Rated Latent Heat Ratio
+  0.8500,                  !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  2.2,                     !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  65.6000,                 !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  None,                    !- Anti-Sweat Heater Control Type
+  0.0,                     !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  0.0,                     !- Case Height {m}
+  0.2000,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  OffCycle,                !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  None,                    !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0,                     !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch,  !- Refrigerated Case Restocking Schedule Name
+  <%= case_name %> Credit Sch;  !- Case Credit Fraction Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.026526281,             !- Coefficient1 Constant
+  0.001078032,             !- Coefficient2 x
+  -0.0000602558,           !- Coefficient3 x**2
+  0.00000123732,           !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:20, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:20, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:30, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:30, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Until: 13:00,0.0,        !- Field 3
+  Until: 14:00,50.0,       !- Field 5
+  Until: 15:00,35.0,       !- Field 7
+  Until: 24:00,0.0;        !- Field 9
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.6,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "meat walk in cooler") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.88,                   !- Rated Ambient Temperature {C}
+  55.0,                    !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.1000,                  !- Rated Latent Heat Ratio
+  0.4000,                  !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  2.2,                     !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  0.0000,                  !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  None,                    !- Anti-Sweat Heater Control Type
+  0.0,                     !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  0.0,                     !- Case Height {m}
+  0.0000,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  ELECTRIC,                !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  None,                    !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0,                     !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch,  !- Refrigerated Case Restocking Schedule Name
+  <%= case_name %> Credit Sch;  !- Case Credit Fraction Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.020376,                !- Coefficient1 Constant
+  0.00024378,              !- Coefficient2 x
+  0.0000114,               !- Coefficient3 x**2
+  0.0000001811,            !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:20, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:20, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:30, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:30, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For: Tuesday Friday,     !- Field 2
+  Until: 4:00,0.0,         !- Field 3
+  Until: 5:00,725.0,       !- Field 5
+  Until: 6:00,417.0,       !- Field 7
+  Until: 7:00,290.0,       !- Field 9
+  Until: 24:00,0.0,        !- Field 11
+  For: AllOtherDays,       !- Field 13
+  Until: 4:00,0.0,         !- Field 14
+  Until: 5:00,125.0,       !- Field 16
+  Until: 6:00,117.0,       !- Field 18
+  Until: 7:00,90.0,        !- Field 20
+  Until: 19:00,0.0,        !- Field 22
+  Until: 20:00,125.0,      !- Field 24
+  Until: 21:00,117.0,      !- Field 26
+  Until: 22:00,90.0,       !- Field 28
+  Until: 24:00,0.0;        !- Field 30
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.4,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "other multideck cases") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.8800,                 !- Rated Ambient Temperature {C}
+  55.0000,                 !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.3000,                  !- Rated Latent Heat Ratio
+  0.8500,                  !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  2.2,                     !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  0.0000,                  !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  None,                    !- Anti-Sweat Heater Control Type
+  0.0,                     !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  0.0,                     !- Case Height {m}
+  0.2000,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  OffCycle,                !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  None,                    !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0,                     !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch,  !- Refrigerated Case Restocking Schedule Name
+  <%= case_name %> Credit Sch;  !- Case Credit Fraction Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.026526281,             !- Coefficient1 Constant
+  0.001078032,             !- Coefficient2 x
+  -0.0000602558,           !- Coefficient3 x**2
+  0.00000123732,           !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:20, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:20, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:30, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:30, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Until: 13:00,0.0,        !- Field 3
+  Until: 14:00,50.0,       !- Field 5
+  Until: 15:00,35.0,       !- Field 7
+  Until: 24:00,0.0;        !- Field 9
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.6,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "multideck meat cases") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.8800,                 !- Rated Ambient Temperature {C}
+  55.0000,                 !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.1000,                  !- Rated Latent Heat Ratio
+  0.8500,                  !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  2.2,                     !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  65.6000,                 !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  LINEAR,                  !- Anti-Sweat Heater Control Type
+  35.0000,                 !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  1.5000,                  !- Case Height {m}
+  0.2000,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  ELECTRIC,                !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  ,                        !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0000,                  !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch;  !- Refrigerated Case Restocking Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.020376,                !- Coefficient1 Constant
+  0.00024378,              !- Coefficient2 x
+  0.0000114,               !- Coefficient3 x**2
+  0.0000001811,            !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:20, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:20, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:30, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:30, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Until: 13:00,0.0,        !- Field 3
+  Until: 14:00,50.0,       !- Field 5
+  Until: 15:00,35.0,       !- Field 7
+  Until: 24:00,0.0;        !- Field 9
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.6,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "reach-in cases") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.8800,                 !- Rated Ambient Temperature {C}
+  55.0000,                 !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.1300,                  !- Rated Latent Heat Ratio
+  0.8500,                  !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  -15.0,                     !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  233.0000,                !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  HeatBalanceMethod,       !- Anti-Sweat Heater Control Type
+  1.5000,                  !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  1.5000,                  !- Case Height {m}
+  0.2000,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  ELECTRIC,                !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  ,                        !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0000,                  !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch,  !- Refrigerated Case Restocking Schedule Name
+  <%= case_name %> Credit Sch;  !- Case Credit Fraction Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.020376,                !- Coefficient1 Constant
+  0.00024378,              !- Coefficient2 x
+  0.0000114,               !- Coefficient3 x**2
+  0.0000001811,            !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 8:00,0,           !- Field 4
+  Until: 8:17,1,           !- Field 6
+  Until: 18:00,0,          !- Field 8
+  Until: 18:17,1,          !- Field 10
+  Until: 24:00,0;          !- Field 12
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 8:00,0,           !- Field 4
+  Until: 8:22,1,           !- Field 6
+  Until: 18:00,0,          !- Field 8
+  Until: 18:22,1,          !- Field 10
+  Until: 24:00,0;          !- Field 12
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Until: 13:00,0.0,        !- Field 3
+  Until: 14:00,50.0,       !- Field 5
+  Until: 15:00,35.0,       !- Field 7
+  Until: 24:00,0.0;        !- Field 9
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.6,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "single-level open cases") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.8800,                 !- Rated Ambient Temperature {C}
+  55.0000,                 !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.1000,                  !- Rated Latent Heat Ratio
+  0.8500,                  !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  -12.0000,                !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  78.7000,                 !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  LINEAR,                  !- Anti-Sweat Heater Control Type
+  35.0000,                 !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  1.5000,                  !- Case Height {m}
+  0.2000,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  ELECTRIC,                !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  None,                    !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0000,                  !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch,  !- Refrigerated Case Restocking Schedule Name
+  <%= case_name %> Credit Sch;  !- Case Credit Fraction Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.020376,                !- Coefficient1 Constant
+  0.00024378,              !- Coefficient2 x
+  0.0000114,               !- Coefficient3 x**2
+  0.0000001811,            !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00,0,          !- Field 4
+  Until: 11:20,1,          !- Field 6
+  Until: 23:00,0,          !- Field 8
+  Until: 23:20,1,          !- Field 10
+  Until: 24:00,0;          !- Field 12
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00,0,          !- Field 4
+  Until: 11:30,1,          !- Field 6
+  Until: 23:00,0,          !- Field 8
+  Until: 23:30,1,          !- Field 10
+  Until: 24:00,0;          !- Field 12
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Until: 13:00,0.0,        !- Field 3
+  Until: 14:00,50.0,       !- Field 5
+  Until: 15:00,35.0,       !- Field 7
+  Until: 24:00,0.0;        !- Field 9
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.6,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "walk in freezer") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.88,                   !- Rated Ambient Temperature {C}
+  55.0,                    !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.1,                     !- Rated Latent Heat Ratio
+  0.4,                     !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  -23.3000,                !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  0.0000,                  !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  None,                    !- Anti-Sweat Heater Control Type
+  0.0,                     !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  0.0,                     !- Case Height {m}
+  0.0000,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  ELECTRIC,                !- Case Defrost Type
+  <%= case_name %> Defrost Sch,  !- Case Defrost Schedule Name
+  <%= case_name %> Defrost Drip Down Sch,  !- Case Defrost Drip-Down Schedule Name
+  None,                    !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.0,                     !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch,  !- Refrigerated Case Restocking Schedule Name
+  <%= case_name %> Credit Sch;  !- Case Credit Fraction Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.020376,                !- Coefficient1 Constant
+  0.00024378,              !- Coefficient2 x
+  0.0000114,               !- Coefficient3 x**2
+  0.0000001811,            !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Defrost Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:20, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:20, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Defrost Drip Down Sch,  !- Name
+  ON/OFF,                  !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:Average,         !- Field 3
+  Until: 11:00, 0,         !- Field 5
+  Until: 11:30, 1,         !- Field 7
+  Until: 23:00, 0,         !- Field 9
+  Until: 23:30, 1,         !- Field 11
+  Until: 24:00, 0;         !- Field 13
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For: Tuesday Friday,     !- Field 2
+  Until: 4:00, 0.0,        !- Field 4
+  Until: 5:00, 725.0,      !- Field 6
+  Until: 6:00, 417.0,      !- Field 8
+  Until: 7:00, 290.0,      !- Field 10
+  Until: 24:00, 0.0,       !- Field 12
+  For: AllOtherDays,       !- Field 13
+  Until: 4:00, 0.0,        !- Field 15
+  Until: 5:00, 125.0,      !- Field 17
+  Until: 6:00, 117.0,      !- Field 19
+  Until: 7:00, 90.0,       !- Field 21
+  Until: 19:00, 0.0,       !- Field 23
+  Until: 20:00, 125.0,     !- Field 25
+  Until: 21:00, 117.0,     !- Field 27
+  Until: 22:00, 90.0,      !- Field 29
+  Until: 24:00, 0.0;       !- Field 31
+
+Schedule:Compact,
+  <%= case_name %> Credit Sch,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Interpolate:No,          !- Field 3
+  Until: 7:00, 0.2,        !- Field 5
+  Until: 21:00, 0.4,       !- Field 7
+  Until: 24:00, 0.2;       !- Field 9
+
+<% elsif (case_type == "self contained case") %>
+Refrigeration:Case,
+  <%= case_name %>,        !- Name
+  <%= case_name %> Case Availability Sch,  !- Availability Schedule Name
+  <%= case_zone %>,        !- Zone Name
+  23.88,                   !- Rated Ambient Temperature {C}
+  55.0,                    !- Rated Ambient Relative Humidity {percent}
+  <%= case_cap %>,                  !- Rated Total Cooling Capacity per Unit Length {W/m}
+  0.08,                     !- Rated Latent Heat Ratio
+  0.85,                     !- Rated Runtime Fraction
+  <%= case_length %>,                     !- Case Length {m}
+  2.0,                !- Case Operating Temperature {C}
+  CaseTemperatureMethod,   !- Latent Case Credit Curve Type
+  <%= case_name %> Latent Case Credit Curve,  !- Latent Case Credit Curve Name
+  <%= case_fan_power %>,                 !- Standard Case Fan Power per Unit Length {W/m}
+  <%= case_fan_power %>,                 !- Operating Case Fan Power per Unit Length {W/m}
+  <%= case_light_power %>,                 !- Standard Case Lighting Power per Unit Length {W/m}
+  ,                        !- Installed Case Lighting Power per Unit Length {W/m}
+  <%= case_name %> Case Light Sch,       !- Case Lighting Schedule Name
+  1.0000,                  !- Fraction of Lighting Energy to Case
+  0.0000,                  !- Case Anti-Sweat Heater Power per Unit Length {W/m}
+  0.0000,                  !- Minimum Anti-Sweat Heater Power per Unit Length {W/m}
+  None,                    !- Anti-Sweat Heater Control Type
+  0.0,                     !- Humidity at Zero Anti-Sweat Heater Energy {percent}
+  0.0,                     !- Case Height {m}
+  0.2,                  !- Fraction of Anti-Sweat Heater Energy to Case
+  <%= case_defrost_power %>,                  !- Case Defrost Power per Unit Length {W/m}
+  None,                !- Case Defrost Type
+  ,  !- Case Defrost Schedule Name
+  ,  !- Case Defrost Drip-Down Schedule Name
+  None,                    !- Defrost Energy Correction Curve Type
+  ,                        !- Defrost Energy Correction Curve Name
+  0.05,                     !- Under Case HVAC Return Air Fraction
+  <%= case_name %> Restock Sch;  !- Refrigerated Case Restocking Schedule Name
+
+Curve:Cubic,
+  <%= case_name %> Latent Case Credit Curve,  !- Name
+  0.026526281,             !- Coefficient1 Constant
+  0.001078032,             !- Coefficient2 x
+  -0.0000602558,           !- Coefficient3 x**2
+  0.00000123732,           !- Coefficient4 x**3
+  -35.0,                   !- Minimum Value of x
+  20.0;                    !- Maximum Value of x
+
+Schedule:Compact,
+  <%= case_name %> Restock Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For:AllDays,             !- Field 2
+  Until: 6:00,0.0,         !- Field 3
+  Until: 7:00,50.0,        !- Field 5
+  Until: 9:00,70.0,        !- Field 7
+  Until: 10:00,80.0,       !- Field 9
+  Until: 11:00,70.0,       !- Field 11
+  Until: 13:00,50.0,       !- Field 13
+  Until: 14:00,80.0,       !- Field 15
+  Until: 15:00,90.0,       !- Field 17
+  Until: 16:00,80.0,       !- Field 19
+  Until: 24:00,0.0;        !- Field 21
+
+<% end %>
