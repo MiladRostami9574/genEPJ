@@ -1,0 +1,250 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "heating_setpoint", :default=>70|'F'
+parameter "cooling_setpoint", :default=>75|'F'
+
+parameter "heating_setpoint_sch", :default=>nil
+parameter "cooling_setpoint_sch", :default=>nil
+
+parameter "oa_method", :default=>"Sum"
+parameter "oa_person", :default=>0|'CFM'
+parameter "oa_area", :default=>0|'CFM/ft2'
+parameter "oa_zone", :default=>0|'CFM'
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+
+# NOTE: Air system must be connected to a return plenum or there will be errors.
+# NOTE2: CooledBeam object is not compatible with the simple duct leakage model; these parameters have no effect.
+parameter "upstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts upstream of the terminal unit
+parameter "downstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts downstream of the terminal unit
+
+parameter "operation_schedule", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+
+%>
+
+Sizing:Zone,
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  SupplyAirTemperature,    !- Zone Cooling Design Supply Air Temperature Input Method
+  11.67,                   !- Zone Cooling Design Supply Air Temperature {C}
+  ,                        !- Zone Cooling Design Supply Air Temperature Difference {deltaC}
+  SupplyAirTemperature,    !- Zone Heating Design Supply Air Temperature Input Method
+  30,                      !- Zone Heating Design Supply Air Temperature {C}
+  ,                        !- Zone Heating Design Supply Air Temperature Difference {deltaC}
+  0.0085,                  !- Zone Cooling Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  0.0080,                  !- Zone Heating Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  <%= zone_name %> Design OA,  !- Design Specification Outdoor Air Object Name
+  ,                        !- Zone Heating Sizing Factor
+  ,                        !- Zone Cooling Sizing Factor
+  DesignDay,               !- Cooling Design Air Flow Method
+  ,                        !- Cooling Design Air Flow Rate {m3/s}
+  ,                        !- Cooling Minimum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Cooling Minimum Air Flow {m3/s}
+  ,                        !- Cooling Minimum Air Flow Fraction
+  DesignDay,               !- Heating Design Air Flow Method
+  ,                        !- Heating Design Air Flow Rate {m3/s}
+  ,                        !- Heating Maximum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Heating Maximum Air Flow {m3/s}
+  ;                        !- Heating Maximum Air Flow Fraction
+
+DesignSpecification:OutdoorAir,
+  <%= zone_name %> Design OA,  !- Name
+  <%= oa_method %>,        !- Outdoor Air Method
+  <%= oa_person %>,        !- Outdoor Air Flow per Person {m3/s-person}
+  <%= oa_area %>,          !- Outdoor Air Flow per Zone Floor Area {m3/s-m2}
+  <%= oa_zone %>;          !- Outdoor Air Flow per Zone {m3/s}
+
+ZoneControl:Thermostat,
+  <%= zone_name %> Thermostat,  !- Name
+  <%= zone_name %>,    !- Zone or ZoneList Name
+  <%= zone_name %> Thermostat Type Sched,  !- Control Type Schedule Name
+  ThermostatSetpoint:DualSetpoint,  !- Control 1 Object Type
+  <%= zone_name %> Setpoints;  !- Control 1 Name
+
+Schedule:Constant,
+  <%= zone_name %> Thermostat Type Sched,  !- Name
+  Control Type,            !- Schedule Type Limits Name
+  4;                       !- Hourly Value
+
+ThermostatSetpoint:DualSetpoint,
+  <%= zone_name %> Setpoints,  !- Name
+  <%= zone_name %> Heating Setpoint Sch,  !- Heating Setpoint Temperature Schedule Name
+  <%= zone_name %> Cooling Setpoint Sch;  !- Cooling Setpoint Temperature Schedule Name
+
+<% if (heating_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= heating_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= heating_setpoint %>;  !- Hourly Value
+<% end %>
+
+<% if (cooling_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= cooling_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= cooling_setpoint %>;  !- Hourly Value
+<% end %>
+
+Schedule:Compact,
+  <%= zone_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+ZoneHVAC:EquipmentConnections,
+  <%= zone_name %>,        !- Zone Name
+  <%= zone_name %> Equipment,  !- Zone Conditioning Equipment List Name
+  <%= zone_name %> Inlet Nodes,  !- Zone Air Inlet Node or NodeList Name
+<% if (exhaust_fan) %>
+  <%= zone_name %> Exhaust Nodes,  !- Zone Air Exhaust Node or NodeList Name
+<% else %>
+  ,                        !- Zone Air Exhaust Node or NodeList Name
+<% end %>
+  <%= zone_name %> Air Node,  !- Zone Air Node Name
+  <%= zone_name %> Return Node;  !- Zone Return Air Node Name
+
+NodeList,
+  <%= zone_name %> Inlet Nodes,  !- Name
+  <%= zone_name %> ATU Outlet Node;  !- Node 1 Name
+
+<% if (exhaust_fan) %>
+NodeList,
+  <%= zone_name %> Exhaust Nodes,    !- Name
+  <%= zone_name %> Exhaust Fan Inlet Node;  !- Node 1 Name
+<% end %>
+
+<% if (exhaust_fan) %>
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  ZoneHVAC:AirDistributionUnit,  !- Zone Equipment 1 Object Type
+  <%= zone_name %> Air Distribution Unit,  !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Sequence
+  1,                       !- Zone Equipment 1 Heating or No-Load Sequence
+  ,                                                        !- Zone Equipment Sequential Cooling Fraction Schedule Name
+  ,                                                        !- Zone Equipment Sequential Heating Fraction Schedule Name
+  ZoneHVAC:Baseboard:Convective:Water,  !- Zone Equipment 2 Object Type
+  <%= zone_name %> Baseboards,  !- Zone Equipment 2 Name
+  2,                       !- Zone Equipment 2 Cooling Priority
+  2,                       !- Zone Equipment 2 Heating Priority
+  ,                                                        !- Zone Equipment Sequential Cooling Fraction Schedule Name
+  ,                                                        !- Zone Equipment Sequential Heating Fraction Schedule Name
+  Fan:ZoneExhaust,         !- Zone Equipment 2 Object Type
+  <%= zone_name %> Exhaust Fan,  !- Zone Equipment 3 Name
+  3,                       !- Zone Equipment 3 Cooling Sequence
+  3;                       !- Zone Equipment 3 Heating or No-Load Sequence
+<% else %>
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  ZoneHVAC:AirDistributionUnit,  !- Zone Equipment 1 Object Type
+  <%= zone_name %> Air Distribution Unit,  !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Priority
+  1,                       !- Zone Equipment 1 Heating Priority
+  ,                                                        !- Zone Equipment Sequential Cooling Fraction Schedule Name
+  ,                                                        !- Zone Equipment Sequential Heating Fraction Schedule Name
+  ZoneHVAC:Baseboard:Convective:Water,  !- Zone Equipment 2 Object Type
+  <%= zone_name %> Baseboards,  !- Zone Equipment 2 Name
+  2,                       !- Zone Equipment 2 Cooling Priority
+  2;                       !- Zone Equipment 2 Heating Priority
+<% end %>
+
+<%# NOTE: Simple duct leakage model is not compatible with AirTerminal:SingleDuct:ConstantVolume:CooledBeam.
+Consider changing to AirTerminal:SingleDuct:VAV:NoReheat and a fan coil unit with no fan energy or some kind of induction unit. %>
+ZoneHVAC:AirDistributionUnit,
+  <%= zone_name %> Air Distribution Unit,  !- Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Distribution Unit Outlet Node Name
+  AirTerminal:SingleDuct:ConstantVolume:CooledBeam,  !- Air Terminal Object Type
+  <%= zone_name %> Chilled Beam;  !- Air Terminal Name
+  !<%= upstream_duct_leakage %>,  !- Nominal Upstream Leakage Fraction
+  !<%= downstream_duct_leakage %>;  !- Constant Downstream Leakage Fraction
+
+AirTerminal:SingleDuct:ConstantVolume:CooledBeam,
+  <%= zone_name %> Chilled Beam,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Active,                  !- Cooled Beam Type
+  <%= zone_name %> ATU Inlet Node,  !- Supply Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node,  !- Supply Air Outlet Node Name
+  <%= zone_name %> Chilled Beam CW Inlet Node,  !- Chilled Water Inlet Node Name
+  <%= zone_name %> Chilled Beam CW Outlet Node,  !- Chilled Water Outlet Node Name
+  Autosize,                !- Supply Air Volumetric Flow Rate {m3/s}
+  ,                        !- Maximum Total Chilled Water Volumetric Flow Rate {m3/s}
+  ,                        !- Number of Beams
+  ,                        !- Beam Length {m}
+  ,                        !- Design Inlet Water Temperature {C}
+  ,                        !- Design Outlet Water Temperature {C}
+  ,                        !- Coil Surface Area per Coil Length {m2/m}
+  ,                        !- Model Parameter a
+  ,                        !- Model Parameter n1
+  ,                        !- Model Parameter n2
+  ,                        !- Model Parameter n3
+  ,                        !- Model Parameter a0 {m2/m}
+  ,                        !- Model Parameter K1
+  ,                        !- Model Parameter n
+  ,                        !- Coefficient of Induction Kin
+  ;                        !- Leaving Pipe Inside Diameter {m}
+
+Branch,
+  <%= zone_name %> CW Demand Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  AirTerminal:SingleDuct:ConstantVolume:CooledBeam,  !- Component 1 Object Type
+  <%= zone_name %> Chilled Beam,  !- Component 1 Name
+  <%= zone_name %> Chilled Beam CW Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> Chilled Beam CW Outlet Node;  !- Component 1 Outlet Node Name
+
+ZoneHVAC:Baseboard:Convective:Water,
+  <%= zone_name %> Baseboards,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= zone_name %> Baseboard HW Inlet Node,  !- Inlet Node Name
+  <%= zone_name %> Baseboard HW Outlet Node,  !- Outlet Node Name
+  HeatingDesignCapacity, !- Heating Design Capacity Method
+  autosize,             !- Heating Design Capacity {W}
+  ,                     !- Heating Design Capacity Per Floor Area {W/m2}
+  ,                     !- Fraction of Autosized Heating Design Capacity
+  Autosize,                !- U-Factor Times Area Value {W/K}
+  Autosize;                !- Maximum Water Flow Rate {m3/s}
+
+Branch,
+  <%= zone_name %> HW Demand Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  ZoneHVAC:Baseboard:Convective:Water,  !- Component 1 Object Type
+  <%= zone_name %> Baseboards,  !- Component 1 Name
+  <%= zone_name %> Baseboard HW Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> Baseboard HW Outlet Node;  !- Component 1 Outlet Node Name
+
+<% if (exhaust_fan) %>
+<%# NOTE: Fan:ZoneExhaust appears to be forced on with night cycling which in turn forces on outdoor air.
+Does not seem possible to do night cycle with exhaust fans without also getting outdoor air during unoccupied hours. %>
+Fan:ZoneExhaust,
+  <%= zone_name %> Exhaust Fan,  !- Name
+  <%= zone_name %> Outdoor Air Schedule,  !- Availability Schedule Name
+  <%= exhaust_fan_eff %>,  !- Fan Efficiency
+  <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+  <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+  <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+  Zone Exhaust Fans;       !- End-Use Subcategory
+<% end %>
+
+<%# Must be separate from Operation Schedule; Operation Schedule is forced on by night cycle. %>
+Schedule:Compact,
+  <%= zone_name %> Outdoor Air Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
