@@ -1,0 +1,18 @@
+@inproceedings{esim2022_205,
+	doi = {},
+	url = {https://publications.ibpsa.org/conference/paper/?id=esim2022_205},
+	year = {2022},
+	month = {June},
+	publisher = {IBPSA-Canada},
+	author = {Scott Bucking and   Milad Rostami},
+	title  = {GenEPJ: A Flexible Python-based EnergyPlus templating library},
+	booktitle = {Proceedings of eSim 2022: 12th Conference of IBPSA-Canada},
+	volume  = {12},
+	isbn = {},
+	address  = {Vancouver, Canada},
+	series  = {eSim},
+	abstract = {This paper presents an open-source Python library, called genEPJ for automated measure implementation using IDF, epJSON, eppy, OpenStudio and Modelkit templates. genEPJ is preconfigured with over 100 functions to modify EnergyPlus input files. The approach is structured for the creation of reference, proposed and optimal designs for studying a particular building configuration or for parametric/optimization studies. A newly added feature allows for the study of resilience by restricting run periods around outage events allowing the simulation of a building's response to a temporary loss of utilities (using backup generators). A multi-objective optimization approach is supported which includes energy, cost, emissions and resiliency indicators. The library is designed to be easily run on external servers or be integrated into existing tools in the Rhino, Revit and OpenStudio ecosystems. Future development is aimed at adding Rhino Honeybee measures to the pre-existing five template languages for additional flexibility.},
+	issn = {},
+	Organisation = {IBPSA-Canada},
+	Editors = {}
+}

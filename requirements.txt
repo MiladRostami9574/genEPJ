@@ -1,0 +1,13 @@
+# https://pip.pypa.io/en/stable/reference/pip_install/#requirements-file-format
+numpy>1.8.0 # genEPJ/cash_flow
+numpy-financial>=1.0.0 # cash_flow
+pandas>1.2.0 # cash_flow
+platypus-opt>=1.0 # optimization
+eppy>0.5 # OPTIONAL eppy template capabilities
+
+# OS requirements:
+# sqlite3 # resilience scripts
+# ruby # openstudio/modelkit
+# openstudio
+# modelkit # ruby libraries
+

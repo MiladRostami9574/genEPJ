@@ -1,0 +1,8 @@
+
+# Features present but not polished yet:
+
+* resilience algorithm and supporting scripts
+  - show via an new example
+* Add backtracking search to genEPJ opti module with waterfall chart
+* Machine Learning module using pytorch to train surrogates
+* Port templates from ModelKit to genEPJ JSON format
