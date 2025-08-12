@@ -1,0 +1,4 @@
+**ENVIRONMENT**:
+  > Found `modelkit' in PATH
+**TEMPLATES**:
+  > Found Modelkit templates: net-zero-templates/templates
