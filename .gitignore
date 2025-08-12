@@ -1,0 +1,19 @@
+**/templateGenerator_epJSON
+ipython/profile_genEPJ/*
+!ipython/profile_genEPJ/ipython_config.py
+**/__pycache__
+EPSchematic/*.json
+EPSchematic/temp
+EPSchematic/test/soln_set/*
+templates/*idf
+templates/*csv
+templates/bkup
+EPSchematic/*png
+# Let users manage their own templates
+Modelkit/net-zero-templates
+**/*.pyc
+html
+examples/sim-OCH
+genEPJ/templates/GHG_Max_hourly_emissions*
+temp
+
