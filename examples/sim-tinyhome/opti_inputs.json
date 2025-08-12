@@ -1,0 +1,47 @@
+{
+    "azi": {
+        "value": 0,
+        "start": -90,
+        "stop": 90,
+        "ref-value": 0,
+        "prop-value": 0,
+        "type": "Real",
+        "description": "% of LPD reduction. 100% implies reference building LPDs"
+    },
+    "li_frac": {
+        "value": 50,
+        "start": 40,
+        "stop": 100,
+        "ref-value": 100,
+        "prop-value": 40,
+        "type": "Real",
+        "description": "% of LPD reduction. 100% implies reference building LPDs"
+    },
+    "app_frac": {
+        "value": 40,
+        "start": 40,
+        "stop": 100,
+        "ref-value": 100,
+        "prop-value": 40,
+        "type": "Real",
+        "description": "% of plug-load reduction. 100% implies reference building LPDs"
+    },
+    "infil_frac": {
+        "value": 0.25,
+        "start": 0.15,
+        "stop": 1.0,
+        "ref-value": 1.0,
+        "prop-value": 0.15,
+        "type": "Real",
+        "description": "Infiltration rate as compared to Reference"
+    },
+    "hvac_sys": {
+        "value": 2,
+        "start": 1,
+        "stop": 2,
+        "ref-value": 1,
+        "prop-value": 2,
+        "type": "Integer",
+        "description": "Look-up value for HVAC system type"
+    }
+}
