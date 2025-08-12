@@ -1,0 +1,51 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "ach", :default=>1.0
+parameter "delta_temp", :default=>2.0|'deltaF'
+parameter "min_temp", :default=>72|'F'
+
+parameter "operation_schedule", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: WinterDesignDay SummerDesignDay,  !- Field 2
+  Until: 24:00, 0.0,       !- Field 3
+  For: AllOtherDays,       !- Field 4
+  Until: 24:00, 1.0;       !- Field 5
+
+"
+
+%>
+
+Schedule:Compact,
+  <%= zone_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+ZoneVentilation:DesignFlowRate,
+  <%= zone_name %> Operable Ventilation,  !- Name
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  <%= zone_name %> Operation Schedule,  !- Schedule Name
+  AirChanges/Hour,         !- Design Flow Rate Calculation Method
+  ,                        !- Design Flow Rate {m3/s}
+  ,                        !- Flow Rate per Zone Floor Area {m3/s-m2}
+  ,                        !- Flow Rate per Person {m3/s-person}
+  <%= ach %>,              !- Air Changes per Hour
+  Natural,                 !- Ventilation Type
+  ,                        !- Fan Pressure Rise {Pa}
+  ,                        !- Fan Total Efficiency
+  0.606,                   !- Constant Term Coefficient
+  2.0199999E-02,           !- Temperature Term Coefficient
+  5.9800001E-04,           !- Velocity Term Coefficient
+  0,                       !- Velocity Squared Term Coefficient
+  <%= min_temp %>,         !- Minimum Indoor Temperature {C}
+  ,                        !- Minimum Indoor Temperature Schedule Name
+  ,                        !- Maximum Indoor Temperature {C}
+  ,                        !- Maximum Indoor Temperature Schedule Name
+  <%= delta_temp %>,       !- Delta Temperature {deltaC}
+  ,                        !- Delta Temperature Schedule Name
+  ,                        !- Minimum Outdoor Temperature {C}
+  ,                        !- Minimum Outdoor Temperature Schedule Name
+  ,                        !- Maximum Outdoor Temperature {C}
+  ,                        !- Maximum Outdoor Temperature Schedule Name
+  ;                        !- Maximum Wind Speed {m/s}

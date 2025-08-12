@@ -1,0 +1,169 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "cooling_coil_cop", :default=>3.23
+
+parameter "heating_coil_cop", :default=>2.75
+
+parameter "fan_eff_supply", :default=>0.65
+parameter "fan_rise_supply", :default=>1.0|'in H2O'
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+
+parameter "operation_schedule", :default=>
+"
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 24:00, 1.0;       !- Field 3
+"
+
+parameter "clear_water_storage_tank", :default=>"" # variable used to create tank to store clear water as cooling coil condensate
+parameter "clear_water_supply_tank", :default=>"" # variable used to create tank to supply clear water for evaporative cooling
+
+%>
+
+
+  ZoneHVAC:WaterToAirHeatPump,
+    <%= zone_name %> Heat Pump,         !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= zone_name %> Air Inlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Air Outlet Node,  !- Air Outlet Node Name
+    OutdoorAir:Mixer, !- Outdoor Air Mixer Object Type
+    <%= zone_name %> OA Mixer, !- Outdoor Air Mixer Name
+    Autosize, !- Supply Air Flow Rate During Cooling Operation {m3/s}
+    Autosize, !- Supply Air Flow Rate During Heating Operation {m3/s}
+    Autosize, !- Supply Air Flow Rate When No Cooling or Heating is Needed {m3/s}
+    Autosize, !- Outdoor Air Flow Rate During Cooling Operation {m3/s}
+    Autosize, !- Outdoor Air Flow Rate During Heating Operation {m3/s}
+    Autosize, !- Outdoor Air Flow Rate When No Cooling or Heating is Needed {m3/s}
+    Fan:OnOff, !- Supply Air Fan Object Type
+    <%= zone_name %> Heat Pump Fan, !- Supply Air Fan Name
+    Coil:Heating:WaterToAirHeatPump:EquationFit,  !- Heating Coil Object Type
+    <%= zone_name %> Heating Coil, !- Heating Coil Name
+    Coil:Cooling:WaterToAirHeatPump:EquationFit,  !- Cooling Coil Object Type
+    <%= zone_name %> Cooling Coil, !- Cooling Coil Name
+    2.5,                     !- Maximum Cycling Rate {cycles/hr}
+    60.0,                    !- Heat Pump Time Constant {s}
+    0.01,                    !- Fraction of On-Cycle Power Use
+    60,                      !- Heat Pump Fan Delay Time {s}
+    Coil:Heating:Electric, !- Supplemental Heating Coil Object Type
+    <%= zone_name %> Supp Heating Coil, !- Supplemental Heating Coil Name
+    Autosize, !- Maximum Supply Air Temperature from Supplemental Heater {C}
+    10.0, !- Maximum Outdoor Dry-Bulb Temperature for Supplemental Heater Operation {C}
+    ,  !- Outdoor Dry-Bulb Temperature Sensor Node Name
+    DrawThrough, !- Fan Placement
+    <%= zone_name %> Fan Operation Schedule; !- Supply Air Fan Operating Mode Schedule Name
+
+  Schedule:Constant,
+    <%= zone_name %> Fan Operation Schedule,  !- Name
+    Any Number,                    !- Schedule Type Limits Name
+    0;                             !- Hourly Value
+
+  OutdoorAir:Node,
+    <%= zone_name %> Outside Air Inlet Node;  !- Name
+
+  OutdoorAir:Mixer,
+    <%= zone_name %> OA Mixer, !- Name
+    <%= zone_name %> OA Outlet Node, !- Mixed Air Node Name
+    <%= zone_name %> Outside Air Inlet Node, !- Outdoor Air Stream Node Name
+    <%= zone_name %> OA Relief Node, !- Relief Air Stream Node Name
+    <%= zone_name %> Air Inlet Node; !- Return Air Stream Node Name
+
+  Coil:Cooling:WaterToAirHeatPump:EquationFit,
+    <%= zone_name %> Cooling Coil,  !- Name
+    <%= zone_name %> Water Source Inlet Node,  !- Water Inlet Node Name
+    <%= zone_name %> Water Source Intermediate Node,  !- Water Outlet Node Name
+    <%= zone_name %> OA Outlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Cooling Coil Outlet Node,  !- Air Outlet Node Name
+    Autosize,                !- Rated Air Flow Rate {m3/s}
+    Autosize,                !- Rated Water Flow Rate {m3/s}
+    Autosize,                !- Gross Rated Total Cooling Capacity {W}
+    Autosize,                !- Gross Rated Sensible Cooling Capacity {W}
+    <%= cooling_coil_cop %>, !- Gross Rated Cooling COP
+    -9.149069561,            !- Total Cooling Capacity Coefficient 1
+    10.87814026,             !- Total Cooling Capacity Coefficient 2
+    -1.718780157,            !- Total Cooling Capacity Coefficient 3
+    0.746414818,             !- Total Cooling Capacity Coefficient 4
+    0.0,                     !- Total Cooling Capacity Coefficient 5
+    -5.462690012,            !- Sensible Cooling Capacity Coefficient 1
+    17.95968138,             !- Sensible Cooling Capacity Coefficient 2
+    -11.87818402,            !- Sensible Cooling Capacity Coefficient 3
+    -0.980163419,            !- Sensible Cooling Capacity Coefficient 4
+    0.767285761,             !- Sensible Cooling Capacity Coefficient 5
+    0.0,                     !- Sensible Cooling Capacity Coefficient 6
+    -3.205409884,            !- Cooling Power Consumption Coefficient 1
+    -0.976409399,            !- Cooling Power Consumption Coefficient 2
+    3.97892546,              !- Cooling Power Consumption Coefficient 3
+    0.938181818,             !- Cooling Power Consumption Coefficient 4
+    0.0,                     !- Cooling Power Consumption Coefficient 5
+    1000,                    !- Nominal Time for Condensate Removal to Begin {s}
+    1.5;                     !- Ratio of Initial Moisture Evaporation Rate and Steady State Latent Capacity
+
+  Coil:Heating:WaterToAirHeatPump:EquationFit,
+    <%= zone_name %> Heating Coil,  !- Name
+    <%= zone_name %> Water Source Intermediate Node,  !- Water Inlet Node Name
+    <%= zone_name %> Water Source Outlet Node,  !- Water Outlet Node Name
+    <%= zone_name %> Cooling Coil Outlet Node, !- Air Inlet Node Name
+    <%= zone_name %> Heating Coil Outlet Node,  !- Air Outlet Node Name
+    Autosize,                !- Rated Air Flow Rate {m3/s}
+    Autosize,                !- Rated Water Flow Rate {m3/s}
+    Autosize,                !- Gross Rated Heating Capacity {W}
+    <%= heating_coil_cop %>, !- Rated COP
+    -1.361311959,            !- Heating Capacity Coefficient 1
+    -2.471798046,            !- Heating Capacity Coefficient 2
+    4.173164514,             !- Heating Capacity Coefficient 3
+    0.640757401,             !- Heating Capacity Coefficient 4
+    0.0,                     !- Heating Capacity Coefficient 5
+    -2.176941116,            !- Heating Power Consumption Coefficient 1
+    0.832114286,             !- Heating Power Consumption Coefficient 2
+    1.570743399,             !- Heating Power Consumption Coefficient 3
+    0.690793651,             !- Heating Power Consumption Coefficient 4
+    0.0;                     !- Heating Power Consumption Coefficient 5
+
+  Branch,
+    <%= zone_name %> HR Demand Branch,  !- Name
+    ,                        !- Pressure Drop Curve Name
+    Coil:Cooling:WaterToAirHeatPump:EquationFit,    !- Component 1 Object Type
+    <%= zone_name %> Cooling Coil,   !- Component 1 Name
+    <%= zone_name %> Water Source Inlet Node,  !- Component 1 Inlet Node Name
+    <%= zone_name %> Water Source Intermediate Node,  !- Component 1 Outlet Node Name
+    Coil:Heating:WaterToAirHeatPump:EquationFit,    !- Component 2 Object Type
+    <%= zone_name %> Heating Coil,   !- Component 2 Name
+    <%= zone_name %> Water Source Intermediate Node,  !- Component 2 Inlet Node Name
+    <%= zone_name %> Water Source Outlet Node;  !- Component 2 Outlet Node Name
+
+  Fan:OnOff,
+    <%= zone_name %> Heat Pump Fan,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= fan_eff_supply %>,     !- Fan Efficiency
+    <%= fan_rise_supply %>,    !- Pressure Rise {Pa}
+    Autosize,    !- Maximum Flow Rate {m^3/s}
+    0.85,                      !- Motor Efficiency
+    1.0,                       !- Motor In Airstream Fraction
+    <%= zone_name %> Heating Coil Outlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Supply Fan Outlet Node;   !- Air Outlet Node Name
+
+  Coil:Heating:Electric,
+    <%= zone_name %> Supp Heating Coil,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    1,                              !- Efficiency
+    Autosize,                   !- Nominal Capacity
+    <%= zone_name %> Supply Fan Outlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Air Outlet Node;  !- Air Outlet Node Name
+
+<% if (exhaust_fan) %>
+<%# NOTE: Fan:ZoneExhaust appears to be forced on with night cycling which in turn forces on outdoor air.
+Does not seem possible to do night cycle with exhaust fans without also getting outdoor air during unoccupied hours. %>
+Fan:ZoneExhaust,
+    <%= zone_name %> Exhaust Fan,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= exhaust_fan_eff %>,  !- Fan Efficiency
+    <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+    <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+    <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+    Zone Exhaust Fans;       !- End-Use Subcategory
+<% end %>

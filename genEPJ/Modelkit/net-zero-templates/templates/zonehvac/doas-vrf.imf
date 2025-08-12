@@ -1,0 +1,264 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "heating_setpoint", :default=>70|'F'
+parameter "cooling_setpoint", :default=>75|'F'
+
+parameter "heating_setpoint_sch", :default=>nil
+parameter "cooling_setpoint_sch", :default=>nil
+
+parameter "oa_method", :default=>"Sum"
+parameter "oa_person", :default=>0
+parameter "oa_area", :default=>0
+parameter "oa_zone", :default=>0|'CFM'
+
+parameter "vrf_fan_flow", :default=>"Autosize"
+parameter "vrf_fan_eff", :default=>0.7
+parameter "vrf_fan_sp", :default=>0.4|'in H2O'
+
+parameter "vrf_cool_cap", :default=>"Autosize"
+parameter "vrf_cool_flow", :default=>"Autosize"
+parameter "vrf_heat_cap", :default=>"Autosize"
+parameter "vrf_heat_flow", :default=>"Autosize"
+
+# NOTE: Air system must be connected to a return plenum or there will be errors.
+parameter "upstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts upstream of the terminal unit
+parameter "downstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts downstream of the terminal unit
+
+parameter "operation_schedule", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+
+parameter "clear_water_storage_tank", :default=>"" # variable used to create tank to store clear water as cooling coil condensate
+%>
+
+Sizing:Zone,
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  SupplyAirTemperature,    !- Zone Cooling Design Supply Air Temperature Input Method
+  16,                      !- Zone Cooling Design Supply Air Temperature {C}
+  ,                        !- Zone Cooling Design Supply Air Temperature Difference {deltaC}
+  SupplyAirTemperature,    !- Zone Heating Design Supply Air Temperature Input Method
+  50,                      !- Zone Heating Design Supply Air Temperature {C}
+  ,                        !- Zone Heating Design Supply Air Temperature Difference {deltaC}
+  0.009,                   !- Zone Cooling Design Supply Air Humidity Ratio {kg-H2O/kg-air}
+  0.004,                   !- Zone Heating Design Supply Air Humidity Ratio {kg-H2O/kg-air}
+  <%= zone_name %> Design OA,  !- Design Specification Outdoor Air Object Name
+  ,                        !- Zone Heating Sizing Factor
+  ,                        !- Zone Cooling Sizing Factor
+  DesignDay,               !- Cooling Design Air Flow Method
+  ,                        !- Cooling Design Air Flow Rate {m3/s}
+  ,                        !- Cooling Minimum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Cooling Minimum Air Flow {m3/s}
+  ,                        !- Cooling Minimum Air Flow Fraction
+  DesignDay,               !- Heating Design Air Flow Method
+  ,                        !- Heating Design Air Flow Rate {m3/s}
+  ,                        !- Heating Maximum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Heating Maximum Air Flow {m3/s}
+  ;                        !- Heating Maximum Air Flow Fraction
+
+DesignSpecification:OutdoorAir,
+  <%= zone_name %> Design OA,  !- Name
+  <%= oa_method %>,        !- Outdoor Air Method
+  <%= oa_person %>,        !- Outdoor Air Flow per Person {m3/s-person}
+  <%= oa_area %>,          !- Outdoor Air Flow per Zone Floor Area {m3/s-m2}
+  <%= oa_zone %>;          !- Outdoor Air Flow per Zone {m3/s}
+
+<% if (heating_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= heating_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= heating_setpoint %>;  !- Hourly Value
+<% end %>
+
+<% if (cooling_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= cooling_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= cooling_setpoint %>;  !- Hourly Value
+<% end %>
+
+Schedule:Compact,
+  <%= zone_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+ZoneControl:Thermostat,
+  <%= zone_name %> Thermostat,  !- Name
+  <%= zone_name %>,    !- Zone or ZoneList Name
+  <%= zone_name %> Thermostat Type Sched,  !- Control Type Schedule Name
+  ThermostatSetpoint:DualSetpoint,  !- Control 1 Object Type
+  <%= zone_name %> Setpoints;  !- Control 1 Name
+
+Schedule:Constant,
+  <%= zone_name %> Thermostat Type Sched,  !- Name
+  Control Type,            !- Schedule Type Limits Name
+  4;                       !- Hourly Value
+
+ThermostatSetpoint:DualSetpoint,
+  <%= zone_name %> Setpoints,  !- Name
+  <%= zone_name %> Heating Setpoint Sch,  !- Heating Setpoint Temperature Schedule Name
+  <%= zone_name %> Cooling Setpoint Sch;  !- Cooling Setpoint Temperature Schedule Name
+
+ZoneHVAC:EquipmentConnections,
+  <%= zone_name %>,    !- Zone Name
+  <%= zone_name %> Equipment,  !- Zone Conditioning Equipment List Name
+  <%= zone_name %> Inlet Node List,  !- Zone Air Inlet Node or NodeList Name
+  <%= zone_name %> Exhaust Node List,  !- Zone Air Exhaust Node or NodeList Name
+  <%= zone_name %> Zone Node,  !- Zone Air Node Name
+  <%= zone_name %> Return Node;  !- Zone Return Air Node Name
+
+NodeList,
+  <%= zone_name %> Inlet Node List,  !- Name
+  <%= zone_name %> ATU Outlet Node,  !- Node 1 Name
+  <%= zone_name %> VRF Terminal Outlet Node;  !- Node 2 Name
+
+NodeList,
+  <%= zone_name %> Exhaust Node List,  !- Name
+  <%= zone_name %> VRF Terminal Inlet Node;  !- Node 2 Name
+
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  ZoneHVAC:AirDistributionUnit,  !- Zone Equipment 1 Object Type
+  <%= zone_name %> Air Distribution Unit,   !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Priority
+  1,                       !- Zone Equipment 1 Heating Priority
+  ZoneHVAC:TerminalUnit:VariableRefrigerantFlow,  !- Zone Equipment 2 Object Type
+  <%= zone_name %> VRF Terminal Unit,  !- Zone Equipment 2 Name
+  2,                       !- Zone Equipment 2 Cooling Sequence
+  2;                       !- Zone Equipment 2 Heating or No-Load Sequence
+
+ZoneHVAC:AirDistributionUnit,
+  <%= zone_name %> Air Distribution Unit,  !- Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Distribution Unit Outlet Node Name
+  AirTerminal:SingleDuct:VAV:NoReheat,  !- Air Terminal Object Type
+  <%= zone_name %> ATU,    !- Air Terminal Name
+  <%= upstream_duct_leakage %>,  !- Nominal Upstream Leakage Fraction
+  <%= downstream_duct_leakage %>;  !- Constant Downstream Leakage Fraction
+
+AirTerminal:SingleDuct:VAV:NoReheat,
+  <%= zone_name %> ATU,    !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Outlet Node Name
+  <%= zone_name %> ATU Inlet Node,  !- Air Inlet Node Name
+  Autosize,                !- Maximum Air Flow Rate {m3/s}
+  Constant,                !- Zone Minimum Air Flow Input Method
+  1.0,                     !- Constant Minimum Air Flow Fraction
+  ,                        !- Fixed Minimum Air Flow Rate {m3/s}
+  ;                        !- Minimum Air Flow Fraction Schedule Name
+
+ZoneHVAC:TerminalUnit:VariableRefrigerantFlow,
+  <%= zone_name %> VRF Terminal Unit,  !- Zone Terminal Unit Name
+  <%= zone_name %> Operation Schedule,  !- Terminal Unit Availability schedule
+  <%= zone_name %> VRF Terminal Inlet Node,  !- Terminal Unit Air Inlet Node Name
+  <%= zone_name %> VRF Terminal Outlet Node,  !- Terminal Unit Air Outlet Node Name
+<%# "When No Cooling/Heating is Needed" fields seem to be broken; has almost effect and fan seems to run all the time %>
+  <%= vrf_cool_flow %>,  !- Supply Air Flow Rate During Cooling Operation {m3/s}
+  <%= vrf_cool_flow %>,  !- Supply Air Flow Rate When No Cooling is Needed {m3/s}
+  <%= vrf_heat_flow %>,  !- Supply Air Flow Rate During Heating Operation {m3/s}
+  <%= vrf_heat_flow %>,  !- Supply Air Flow Rate When No Heating is Needed {m3/s}
+<%# Outdoor Air to be provided by air terminal unit connected to central air system %>
+  0,                       !- Outdoor Air Flow Rate During Cooling Operation {m3/s}
+  0,                       !- Outdoor Air Flow Rate During Heating Operation {m3/s}
+  0,                       !- Outdoor Air Flow Rate When No Cooling or Heating is Needed {m3/s}
+  <%= zone_name %> VRF Fan Mode Sched,  !- Supply Air Fan Operating Mode Schedule Name
+  DrawThrough,             !- Supply Air Fan placement
+  Fan:OnOff,               !- Supply Air Fan Object Type
+  <%= zone_name %> VRF Fan,  !- Supply Air Fan Object Name
+  ,                        !- Outside Air Mixer Object Type
+  ,                        !- Outside Air Mixer Object Name
+  Coil:Cooling:DX:VariableRefrigerantFlow,  !- Cooling Coil Object Type
+  <%= zone_name %> VRF DX Cooling Coil,  !- Cooling Coil Object Name
+  Coil:Heating:DX:VariableRefrigerantFlow,  !- Heating Coil Object Type
+  <%= zone_name %> VRF DX Heating Coil,  !- Heating Coil Object Name
+  30,                      !- Zone Terminal Unit On Parasitic Electric Energy Use {W}
+  20,                      !- Zone Terminal Unit Off Parasitic Electric Energy Use {W}
+  1.0,                     !- Rated Total Heating Capacity Sizing Ratio {W/W}
+  ;                        !- Availability Manager List Name
+
+<%# VRF Mode Sched = 0 indicates cycling fan and cycling coil operation;
+  VRF Mode Sched != 0 indicates constant fan and cycling coil operation. %>
+Schedule:Constant,
+  <%= zone_name %> VRF Fan Mode Sched,  !- Name
+  Control Type,            !- Schedule Type Limits Name
+  0;                       !- Hourly Value
+
+Fan:OnOff,
+  <%= zone_name %> VRF Fan,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= vrf_fan_eff %>,  !- Fan Efficiency
+  <%= vrf_fan_sp %>,  !- Pressure Rise {Pa}
+  <%= vrf_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+  0.9,                     !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  <%= zone_name %> VRF DX HCoil Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> VRF Terminal Outlet Node;  !- Air Outlet Node Name
+
+Coil:Cooling:DX:VariableRefrigerantFlow,
+  <%= zone_name %> VRF DX Cooling Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= vrf_cool_cap %>,  !- Rated Total Cooling Capacity {W}
+  Autosize,                !- Rated Sensible Heat Ratio
+  <%= vrf_cool_flow %>,  !- Rated Air Flow Rate {m3/s}
+  <%= zone_name %> VRFTUCoolCapFT,  !- Cooling Capacity Ratio Modifier Function of Temperature Curve Name
+  <%= zone_name %> VRFACCoolCapFFF,  !- Cooling Capacity Modifier Curve Function of Flow Fraction Name
+  <%= zone_name %> VRF Terminal Inlet Node,  !- Coil Air Inlet Node
+  <%= zone_name %> VRF DX CCoil Outlet Node,  !- Coil Air Outlet Node
+  <%= clear_water_storage_tank %>;                        !- Condensate Collection Water Storage Tank Name
+
+Coil:Heating:DX:VariableRefrigerantFlow,
+  <%= zone_name %> VRF DX Heating Coil, !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule
+  <%= vrf_heat_cap %>,  !- Rated Total Heating Capacity {W}
+  <%= vrf_heat_flow %>,  !- Rated Air Flow Rate {m3/s}
+  <%= zone_name %> VRF DX CCoil Outlet Node,  !- Coil Air Inlet Node
+  <%= zone_name %> VRF DX HCoil Outlet Node,  !- Coil Air Outlet Node
+  <%= zone_name %> VRFTUHeatCapFT,  !- Heating Capacity Ratio Modifier Function of Temperature Curve Name
+  <%= zone_name %> VRFACCoolCapFFF;  !- Heating Capacity Modifier Function of Flow Fraction Curve Name
+
+Curve:Cubic,
+  <%= zone_name %> VRFTUCoolCapFT,  !- Name
+  0.504547273506488,       !- Coefficient1 Constant
+  0.0288891279198444,      !- Coefficient2 x
+  -0.000010819418650677,   !- Coefficient3 x**2
+  0.0000101359395177008,   !- Coefficient4 x**3
+  0.0,                     !- Minimum Value of x
+  50.0,                    !- Maximum Value of x
+  0.5,                     !- Minimum Curve Output
+  1.5,                     !- Maximum Curve Output
+  Temperature,             !- Input Unit Type for X
+  Dimensionless;           !- Output Unit Type
+
+Curve:Cubic,
+  <%= zone_name %> VRFTUHeatCapFT,  !- Name
+  -0.390708928227928,      !- Coefficient1 Constant
+  0.261815023760162,       !- Coefficient2 x
+  -0.0130431603151873,     !- Coefficient3 x**2
+  0.000178131745997821,    !- Coefficient4 x**3
+  0.0,                     !- Minimum Value of x
+  50.0,                    !- Maximum Value of x
+  0.5,                     !- Minimum Curve Output
+  1.5,                     !- Maximum Curve Output
+  Temperature,             !- Input Unit Type for X
+  Dimensionless;           !- Output Unit Type
+
+Curve:Quadratic,
+  <%= zone_name %> VRFACCoolCapFFF,  !- Name
+  0.8,                     !- Coefficient1 Constant
+  0.2,                     !- Coefficient2 x
+  0.0,                     !- Coefficient3 x**2
+  0.5,                     !- Minimum Value of x
+  1.5;                     !- Maximum Value of x

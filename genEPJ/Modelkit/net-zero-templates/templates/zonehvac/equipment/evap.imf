@@ -1,0 +1,94 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+
+parameter "evap_fan_eff", :default=>0.25
+parameter "evap_fan_rise", :default=>1.0|'in H2O'
+parameter "evap_fan_flow", :default=>"Autosize"
+
+parameter "clear_water_supply_tank", :default=>"" # variable used to create tank to supply clear water for evaporative cooling
+%>
+
+  ZoneHVAC:EvaporativeCoolerUnit,
+    <%= zone_name %> Evaporative Cooler,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    ,                        !- Availability Manager List Name
+    <%= zone_name %> Evaporative Cooler Outdoor Air Node,  !- Outdoor Air Inlet Node Name
+    <%= zone_name %> Evaporative Cooler Outlet Node,     !- Cooler Outlet Node Name
+    <%= zone_name %> Evaporative Cooler Relief Node,    !- Zone Relief Air Node Name
+    Fan:VariableVolume,      !- Supply Air Fan Object Type
+    <%= zone_name %> Evaporative Cooler Fan,     !- Supply Air Fan Name
+    <%= evap_fan_flow %>,        !- Design Supply Air Flow Rate {m3/s}
+    BlowThrough,             !- Fan Placement
+    ZoneCoolingLoadVariableSpeedFan,  !- Cooler Unit Control Method
+    1.1,                     !- Throttling Range Temperature Difference {deltaC}
+    100.0,                   !- Cooling Load Control Threshold Heat Transfer Rate {W}
+    EvaporativeCooler:Direct:ResearchSpecial,  !- First Evaporative Cooler Object Type
+    <%= zone_name %> Evaporative Cooler Media;  !- First Evaporative Cooler Name
+
+  OutdoorAir:Node,
+    <%= zone_name %> Evaporative Cooler Outdoor Air Node;  !- Name
+
+  Fan:VariableVolume,
+    <%= zone_name %> Evaporative Cooler Fan,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= evap_fan_eff %>,  !- Fan Efficiency
+    <%= evap_fan_rise %>,  !- Pressure Rise {Pa}
+    <%= evap_fan_flow %>,        !- Maximum Flow Rate {m3/s}
+    Fraction,                !- Fan Power Minimum Flow Rate Input Method
+    0.0,                     !- Fan Power Minimum Flow Fraction {}
+    0.0,                     !- Fan Power Minimum Flow Rate {m3/s}
+    0.9,                     !- Motor Efficiency
+    1.0,                     !- Motor In Airstream Fraction
+    0,                       !- Fan Power Coefficient 1
+    1,                       !- Fan Power Coefficient 2
+    0,                       !- Fan Power Coefficient 3
+    0,                       !- Fan Power Coefficient 4
+    0,                       !- Fan Power Coefficient 5
+    <%= zone_name %> Evaporative Cooler Outdoor Air Node,  !- Air Inlet Node Name
+    <%= zone_name %> Evaporative Cooler Fan Outlet Node;  !- Air Outlet Node Name
+
+  EvaporativeCooler:Direct:ResearchSpecial,
+  <%= zone_name %> Evaporative Cooler Media,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  0.7,                !- Cooler Design Effectiveness
+  ,                    !- Effectiveness Flow Ratio Modifier Curve Name
+  Autosize,                    !- Primary Air Design Flow Rate {m3/s}
+  55.0,                    !- Recirculating Water Pump Design Power {W}
+  ,                    !- Water Pump Power Sizing Factor {W/(m3/s)}
+  ,                    !- Water Pump Power Modifier Curve Name
+  <%= zone_name %> Evaporative Cooler Fan Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> Evaporative Cooler Outlet Node,  !- Air Outlet Node Name
+  <%= zone_name %> Evaporative Cooler Outlet Node,  !- Sensor Node Name
+  <%= clear_water_supply_tank %>,                        !- Water Supply Storage Tank Name
+  0.0,                     !- Drift Loss Fraction
+  3;                       !- Blowdown Concentration Ratio
+
+SetpointManager:SingleZone:Cooling,
+    <%= zone_name %> Evaporative Cooler Media Supply Air Temp Manager,  !- Name
+    Temperature,             !- Control Variable
+    7.22,                    !- Minimum Supply Air Temperature {C}
+    25.,                     !- Maximum Supply Air Temperature {C}
+    <%= zone_name %>,                  !- Control Zone Name
+    <%= zone_name %> Air Node,        !- Zone Node Name
+    <%= zone_name %> Evaporative Cooler Outlet Node,     !- Zone Inlet Node Name
+    <%= zone_name %> Evaporative Cooler Outlet Node;  !- Setpoint Node or NodeList Name
+
+<% if (exhaust_fan) %>
+<%# NOTE: Fan:ZoneExhaust appears to be forced on with night cycling which in turn forces on outdoor air.
+Does not seem possible to do night cycle with exhaust fans without also getting outdoor air during unoccupied hours. %>
+  Fan:ZoneExhaust,
+    <%= zone_name %> Exhaust Fan,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= exhaust_fan_eff %>,  !- Fan Efficiency
+    <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+    <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+    <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+    Zone Exhaust Fans;       !- End-Use Subcategory
+<% end %>
+

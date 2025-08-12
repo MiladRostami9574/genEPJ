@@ -1,0 +1,78 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "baseboard_type", :default=>"ELECTRIC"     # (ELECTRIC | HOTWATER)
+parameter "baseboard_cap", :default=>"Autosize"   # Autosize or Watts
+parameter "baseboard_cap_ua", :default=>"Autosize"
+parameter "baseboard_avg_water_temp", :default=>180|'F'
+parameter "baseboard_entering_air", :default=>65|'F'
+parameter "baseboard_elec_eff", :default=>1.00 # efficiency of electric baseboard heaters
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+%>
+
+<%
+# Creating E+ objects directly related to defining ZoneHVAC components for baseboard heaters
+%>
+
+<% if (baseboard_type == "HOTWATER") %>
+
+<% if (baseboard_cap == "Autosize") %>
+<%# Calculate UA-factor from baseboard capacity and average design temperatures
+baseboard_cap_ua = baseboard_cap
+%>
+
+<% else %>
+<%# Calculate UA-factor from baseboard capacity and average design temperatures
+baseboard_cap_ua = baseboard_cap / (baseboard_avg_water_temp - baseboard_entering_air)
+%>
+
+<% end %>
+
+  ZoneHVAC:Baseboard:Convective:Water,
+    <%= zone_name %> Baseboards,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= zone_name %> Baseboard HW Inlet Node,  !- Inlet Node Name
+    <%= zone_name %> Baseboard HW Outlet Node,  !- Outlet Node Name
+    HeatingDesignCapacity, !- Heating Design Capacity Method
+    autosize,             !- Heating Design Capacity {W}
+    ,                     !- Heating Design Capacity Per Floor Area {W/m2}
+    ,                     !- Fraction of Autosized Heating Design Capacity
+    <%= baseboard_cap_ua %>,                !- U-Factor Times Area Value {W/K}
+    autosize;                !- Maximum Water Flow Rate {m3/s}
+
+  Branch,
+    <%= zone_name %> Baseboards HW Demand Branch,  !- Name
+    ,                        !- Pressure Drop Curve Name
+    ZoneHVAC:Baseboard:Convective:Water,  !- Component 1 Object Type
+    <%= zone_name %> Baseboards,  !- Component 1 Name
+    <%= zone_name %> Baseboard HW Inlet Node,  !- Component 1 Inlet Node Name
+    <%= zone_name %> Baseboard HW Outlet Node;  !- Component 1 Outlet Node Name
+
+<% elsif (baseboard_type == "ELECTRIC") %>
+  ZoneHVAC:Baseboard:Convective:Electric,
+    <%= zone_name %> Baseboards, !- Baseboard Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    HeatingDesignCapacity, !- Heating Design Capacity Method
+    <%= baseboard_cap %>, !- Heating Design Capacity {W}
+    ,                     !- Heating Design Capacity Per Floor Area {W/m2}
+    ,                     !- Fraction of Autosized Heating Design Capacity
+    <%= baseboard_elec_eff %>; !- Efficiency of the BaseBoard
+<% end %>
+
+<% if (exhaust_fan) %>
+<%# NOTE: Fan:ZoneExhaust appears to be forced on with night cycling which in turn forces on outdoor air.
+Does not seem possible to do night cycle with exhaust fans without also getting outdoor air during unoccupied hours. %>
+Fan:ZoneExhaust,
+    <%= zone_name %> Exhaust Fan,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= exhaust_fan_eff %>,  !- Fan Efficiency
+    <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+    <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+    <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+    Zone Exhaust Fans;       !- End-Use Subcategory
+<% end %>

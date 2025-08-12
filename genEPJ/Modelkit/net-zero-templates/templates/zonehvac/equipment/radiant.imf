@@ -1,0 +1,180 @@
+<%#INITIALIZE
+parameter "zone_name"
+parameter "heating_setpoint", :default=>70|'F'
+parameter "cooling_setpoint", :default=>75|'F'
+
+parameter "zone_area"  # Required because radiant slab does not autosize
+parameter "radiant_heating_type", :default=>"ELECTRIC" # ( NONE | ELECTRIC | HOTWATER )
+parameter "radiant_cooling_type", :default=>"NONE" # ( NONE | CHILLEDWATER )
+
+parameter "radiant_control_type", :default=>"OPT"  # Radiant control temperature (MAT | MRT | OPT)
+parameter "radiant_tube_diameter", :default=>0.013|'m'  # Radiant tube diameter (m) - yes, meters because Clina uses SI
+parameter "radiant_flow_sizing", :default=>0.6  # Rated flow rate sizing factor (m3/s per 1000000 m2)
+
+parameter "radiant_supp_hw_temp", :default=>140|'F'  # Radiant supply hot water temperature
+parameter "radiant_supp_cw_temp", :default=>55|'F'  # Radiant supply chilled water temperature
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+%>
+
+<%
+radiant_surface_name = zone_name + " Ceiling"
+radiant_flow_rate = radiant_flow_sizing * zone_area / 1000000.0
+%>
+
+<% if radiant_heating_type == "ELECTRIC" %>
+
+  ZoneHVAC:LowTemperatureRadiant:Electric,
+    <%= zone_name %> Radiant,   !- Name
+    <%= zone_name %> Always On Schedule,     !- Availability Schedule Name
+    <%= zone_name %>,               !- Zone Name
+    <%= zone_name %> Ceiling,            !- Surface Name or Radiant Surface Group Name
+    HeatingDesignCapacity, !- Heating Design Capacity Method
+    autosize,             !- Heating Design Capacity {W}
+    ,                     !- Heating Design Capacity Per Floor Area {W/m2}
+    ,                     !- Fraction of Autosized Heating Design Capacity
+    MeanAirTemperature,      !- Temperature Control Type
+    2.0,                     !- Heating Throttling Range {deltaC}
+    <%= zone_name %> Heating Setpoint Sch;  !- Heating Setpoint Temperature Schedule Name
+
+<% else %>
+
+  ZoneHVAC:LowTemperatureRadiant:ConstantFlow,
+    <%= zone_name %> Radiant,        !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= zone_name %>,  !- Zone Name
+    <%= radiant_surface_name %>,  !- Surface Name or Radiant Surface Group Name
+    <%= radiant_tube_diameter %>,  !- Hydronic Tubing Inside Diameter {m}
+    100000,                  !- Hydronic Tubing Length {m}
+  <% if (radiant_control_type == "MAT") %>
+    MeanAirTemperature,      !- Temperature Control Type
+  <% elsif (radiant_control_type == "MRT") %>
+    MeanRadiantTemperature,  !- Temperature Control Type
+  <% elsif (radiant_control_type == "OPT") %>
+    OperativeTemperature,    !- Temperature Control Type
+  <% end %>
+    <%= radiant_flow_rate %>,  !- Rated Flow Rate {m3/s}
+    ,                        !- Pump Flow Rate Schedule Name
+    0,                       !- Rated Pump Head {Pa}
+    0.000001,                !- Rated Power Consumption {W}
+    1.0,                     !- Motor Efficiency
+    1.0,                     !- Fraction of Motor Inefficiencies to Fluid Stream
+  <% if radiant_heating_type == "NONE" %>
+    ,  !- Heating Water Inlet Node Name
+    ,  !- Heating Water Outlet Node Name
+  <% else %>
+    <%= zone_name %> Radiant HW Inlet Node,  !- Heating Water Inlet Node Name
+    <%= zone_name %> Radiant HW Outlet Node,  !- Heating Water Outlet Node Name
+  <% end %>
+    <%= zone_name %> Radiant Heating High Water Temp,  !- Heating High Water Temperature Schedule Name
+    <%= zone_name %> Radiant Heating Low Water Temp,  !- Heating Low Water Temperature Schedule Name
+    <%= zone_name %> Radiant Heating High Setpoint Temp,  !- Heating High Control Temperature Schedule Name
+    <%= zone_name %> Radiant Heating Low Setpoint Temp,  !- Heating Low Control Temperature Schedule Name
+  <% if radiant_cooling_type == "NONE" %>
+    ,  !- Cooling Water Inlet Node Name
+    ,  !- Cooling Water Outlet Node Name
+  <% else %>
+    <%= zone_name %> Radiant CW Inlet Node,  !- Cooling Water Inlet Node Name
+    <%= zone_name %> Radiant CW Outlet Node,  !- Cooling Water Outlet Node Name
+  <% end %>
+    <%= zone_name %> Radiant Cooling High Water Temp,  !- Cooling High Water Temperature Schedule Name
+    <%= zone_name %> Radiant Cooling Low Water Temp,  !- Cooling Low Water Temperature Schedule Name
+    <%= zone_name %> Radiant Cooling High Setpoint Temp,  !- Cooling High Control Temperature Schedule Name
+    <%= zone_name %> Radiant Cooling Low Setpoint Temp,  !- Cooling Low Control Temperature Schedule Name
+    Off;                     !- Condensation Control Type
+
+<%# Operating behavior is not very sensitive to the throttling range %>
+  Schedule:Constant,
+    <%= zone_name %> Radiant Heating High Water Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+    <%= radiant_supp_hw_temp + 2.0 %>;  !- Hourly Value
+
+  Schedule:Constant,
+    <%= zone_name %> Radiant Heating Low Water Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+    <%= radiant_supp_hw_temp - 2.0 %>;  !- Hourly Value
+
+
+  Schedule:Constant,
+    <%= zone_name %> Radiant Heating High Setpoint Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+  <% if radiant_heating_type == "NONE" %>
+    0;  !- Hourly Value
+  <% else %>
+    <%= heating_setpoint + 2.0 %>;  !- Hourly Value
+  <% end %>
+
+  Schedule:Constant,
+    <%= zone_name %> Radiant Heating Low Setpoint Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+  <% if radiant_heating_type == "NONE" %>
+    0;  !- Hourly Value
+  <% else %>
+    <%= heating_setpoint - 2.0 %>;  !- Hourly Value
+  <% end %>
+
+  Schedule:Constant,
+    <%= zone_name %> Radiant Cooling High Water Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+    <%= radiant_supp_cw_temp + 2.0 %>;  !- Hourly Value
+
+  Schedule:Constant,
+    <%= zone_name %> Radiant Cooling Low Water Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+    <%= radiant_supp_cw_temp - 2.0 %>;  !- Hourly Value
+
+  Schedule:Constant,
+    <%= zone_name %> Radiant Cooling High Setpoint Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+  <% if radiant_cooling_type == "NONE" %>
+    100;  !- Hourly Value
+  <% else %>
+    <%= cooling_setpoint + 2.0 %>;  !- Hourly Value
+  <% end %>
+
+  Schedule:Constant,
+    <%= zone_name %> Radiant Cooling Low Setpoint Temp,  !- Name
+    Temperature,             !- Schedule Type Limits Name
+  <% if radiant_cooling_type == "NONE" %>
+    100;  !- Hourly Value
+  <% else %>
+    <%= cooling_setpoint - 2.0 %>;  !- Hourly Value
+  <% end %>
+
+  <% if radiant_heating_type == "HOTWATER" %>
+  Branch,
+    <%= zone_name %> Radiant HW Demand Branch,  !- Name
+    ,                        !- Pressure Drop Curve Name
+    ZoneHVAC:LowTemperatureRadiant:ConstantFlow,  !- Component 1 Object Type
+    <%= zone_name %> Radiant,  !- Component 1 Name
+    <%= zone_name %> Radiant HW Inlet Node,  !- Component 1 Inlet Node Name
+    <%= zone_name %> Radiant HW Outlet Node;  !- Component 1 Outlet Node Name
+  <% end %>
+
+  <% if radiant_cooling_type == "CHILLEDWATER" %>
+  Branch,
+    <%= zone_name %> Radiant CW Demand Branch,  !- Name
+    ,                        !- Pressure Drop Curve Name
+    ZoneHVAC:LowTemperatureRadiant:ConstantFlow,  !- Component 1 Object Type
+    <%= zone_name %> Radiant,  !- Component 1 Name
+    <%= zone_name %> Radiant CW Inlet Node,  !- Component 1 Inlet Node Name
+    <%= zone_name %> Radiant CW Outlet Node;  !- Component 1 Outlet Node Name
+  <% end %>
+<% end %>
+
+<% if (exhaust_fan) %>
+<%# NOTE: Fan:ZoneExhaust appears to be forced on with night cycling which in turn forces on outdoor air.
+Does not seem possible to do night cycle with exhaust fans without also getting outdoor air during unoccupied hours. %>
+  Fan:ZoneExhaust,
+    <%= zone_name %> Exhaust Fan,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= exhaust_fan_eff %>,  !- Fan Efficiency
+    <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+    <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+    <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+    Zone Exhaust Fans;       !- End-Use Subcategory
+<% end %>

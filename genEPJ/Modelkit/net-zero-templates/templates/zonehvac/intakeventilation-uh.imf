@@ -1,0 +1,249 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "heating_setpoint", :default=>70|'F'
+parameter "cooling_setpoint", :default=>75|'F'
+parameter "heating_setpoint_sch", :default=>nil
+parameter "cooling_setpoint_sch", :default=>nil
+parameter "heating_design_supply_air_temp", :default=>95|'F'
+
+parameter "oa_method", :default=>"Sum"
+parameter "oa_person", :default=>0|'CFM'
+parameter "oa_area", :default=>0|'CFM/ft2'
+parameter "oa_zone", :default=>0|'CFM'
+
+parameter "fan_eff_uh", :default=>0.6
+parameter "fan_motor_eff_uh", :default=>0.85
+parameter "fan_rise_uh", :default=>0.35|'in H2O'
+parameter "heating_coil_type_uh", :default=>"GAS"  # (GAS | ELECTRIC | HOTWATER)
+parameter "heating_coil_eff_uh", :default=>0.8  # Used only with GAS coil type
+parameter "operation_schedule_uh", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+
+parameter "flow_area_intakevent", :default=>0.05|'CFM/ft2'
+parameter "fan_rise_intakevent", :default=>0.2|'in H2O'  # Fan pressure rise (in H2O)
+parameter "fan_eff_intakevent", :default=>0.53625  # Fan efficiency
+parameter "min_temp_intakevent", :default=>45|'F'
+parameter "operation_schedule_intakevent", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+
+%>
+
+Sizing:Zone,
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  SupplyAirTemperature,    !- Zone Cooling Design Supply Air Temperature Input Method
+  <%= 55|'F' %>,           !- Zone Cooling Design Supply Air Temperature {C}
+  ,                        !- Zone Cooling Design Supply Air Temperature Difference {deltaC}
+  SupplyAirTemperature,    !- Zone Heating Design Supply Air Temperature Input Method
+  <%= heating_design_supply_air_temp %>,  !- Zone Heating Design Supply Air Temperature {C}
+  ,                        !- Zone Heating Design Supply Air Temperature Difference {deltaC}
+  0.0085,                  !- Zone Cooling Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  0.0080,                  !- Zone Heating Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  <%= zone_name %> Design OA,  !- Design Specification Outdoor Air Object Name
+  ,                        !- Zone Heating Sizing Factor
+  ,                        !- Zone Cooling Sizing Factor
+  DesignDay,               !- Cooling Design Air Flow Method
+  ,                        !- Cooling Design Air Flow Rate {m3/s}
+  ,                        !- Cooling Minimum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Cooling Minimum Air Flow {m3/s}
+  ,                        !- Cooling Minimum Air Flow Fraction
+  DesignDay,               !- Heating Design Air Flow Method
+  ,                        !- Heating Design Air Flow Rate {m3/s}
+  ,                        !- Heating Maximum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Heating Maximum Air Flow {m3/s}
+  ;                        !- Heating Maximum Air Flow Fraction
+
+DesignSpecification:OutdoorAir,
+  <%= zone_name %> Design OA,  !- Name
+  <%= oa_method %>,        !- Outdoor Air Method
+  <%= oa_person %>,        !- Outdoor Air Flow per Person {m3/s-person}
+  <%= oa_area %>,          !- Outdoor Air Flow per Zone Floor Area {m3/s-m2}
+  <%= oa_zone %>;          !- Outdoor Air Flow per Zone {m3/s}
+
+ZoneControl:Thermostat,
+  <%= zone_name %> Thermostat,  !- Name
+  <%= zone_name %>,    !- Zone or ZoneList Name
+  <%= zone_name %> Thermostat Type Sched,  !- Control Type Schedule Name
+  ThermostatSetpoint:DualSetpoint,  !- Control 1 Object Type
+  <%= zone_name %> Setpoints;  !- Control 1 Name
+
+Schedule:Constant,
+  <%= zone_name %> Thermostat Type Sched,  !- Name
+  Control Type,            !- Schedule Type Limits Name
+  4;                       !- Hourly Value
+
+ThermostatSetpoint:DualSetpoint,
+  <%= zone_name %> Setpoints,  !- Name
+  <%= zone_name %> Heating Setpoint Sch,  !- Heating Setpoint Temperature Schedule Name
+  <%= zone_name %> Cooling Setpoint Sch;  !- Cooling Setpoint Temperature Schedule Name
+
+<% if (heating_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= heating_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= heating_setpoint %>;  !- Hourly Value
+<% end %>
+
+<% if (cooling_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= cooling_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= cooling_setpoint %>;  !- Hourly Value
+<% end %>
+
+Schedule:Compact,
+  <%= zone_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule_uh %>
+
+ZoneHVAC:EquipmentConnections,
+  <%= zone_name %>,        !- Zone Name
+  <%= zone_name %> Equipment,  !- Zone Conditioning Equipment List Name
+  <%= zone_name %> Inlet Nodes,  !- Zone Air Inlet Node or NodeList Name
+  <%= zone_name %> Exhaust Nodes,  !- Zone Air Exhaust Node or NodeList Name
+  <%= zone_name %> Air Node,  !- Zone Air Node Name
+  <%= zone_name %> Return Node;  !- Zone Return Air Node Name
+
+NodeList,
+  <%= zone_name %> Inlet Nodes,  !- Name
+  <%= zone_name %> UH Outlet Node;  !- Node 1 Name
+
+NodeList,
+  <%= zone_name %> Exhaust Nodes,  !- Name
+  <%= zone_name %> UH Inlet Node;  !- Node 1 Name
+
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  ZoneHVAC:UnitHeater,     !- Zone Equipment 1 Object Type
+  <%= zone_name %> Unit Heater,  !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Priority
+  1;                       !- Zone Equipment 1 Heating Priority
+
+ZoneHVAC:UnitHeater,
+  <%= zone_name %> Unit Heater,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= zone_name %> UH Inlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> UH Outlet Node,  !- Air Outlet Node Name
+  Fan:ConstantVolume,      !- Supply Air Fan Object Type
+  <%= zone_name %> UH Fan,  !- Supply Air Fan Name
+  Autosize,                !- Maximum Supply Air Flow Rate {m3/s}
+<% if (heating_coil_type_uh == 'GAS') %>
+  Coil:Heating:Fuel,       !- Heating Coil Object Type
+<% elsif (heating_coil_type_uh == 'ELECTRIC') %>
+  Coil:Heating:Electric,   !- Heating Coil Object Type
+<% elsif (heating_coil_type_uh == 'HOTWATER') %>
+  Coil:Heating:Water,      !- Heating Coil Object Type
+<% end %>
+  <%= zone_name %> UH Coil,  !- Heating Coil Name
+  ,                        !- Supply Air Fan Operating Mode Schedule Name
+  No,                      !- Supply Air Fan Operation During No Heating
+  Autosize,                !- Maximum Hot Water or Steam Flow Rate {m3/s}
+  0.0,                     !- Minimum Hot Water or Steam Flow Rate {m3/s}
+  0.001;                   !- Heating Convergence Tolerance
+
+Fan:ConstantVolume,
+  <%= zone_name %> UH Fan,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= fan_eff_uh %>,  !- Fan Efficiency
+  <%= fan_rise_uh %>,  !- Pressure Rise {Pa}
+  Autosize,                !- Maximum Flow Rate {m3/s}
+  <%= fan_motor_eff_uh %>,                    !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  <%= zone_name %> UH Inlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> UH Fan Outlet Node;  !- Air Outlet Node Name
+
+<% if (heating_coil_type_uh == 'GAS') %>
+Coil:Heating:Fuel,
+  <%= zone_name %> UH Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  NaturalGas,               !- Fuel Type
+  <%= heating_coil_eff_uh %>,  !- Gas Burner Efficiency
+  Autosize,                !- Nominal Capacity {W}
+  <%= zone_name %> UH Fan Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> UH Outlet Node;  !- Air Outlet Node Name
+<% elsif (heating_coil_type_uh == 'ELECTRIC') %>
+Coil:Heating:Electric,
+  <%= zone_name %> UH Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  1.0,                     !- Efficiency
+  Autosize,                !- Nominal Capacity {W}
+  <%= zone_name %> UH Fan Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> UH Outlet Node,  !- Air Outlet Node Name
+  ;                        !- Temperature Setpoint Node Name
+<% elsif (heating_coil_type_uh == 'HOTWATER') %>
+Coil:Heating:Water,
+  <%= zone_name %> UH Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Autosize,                !- U-Factor Times Area Value {W/K}
+  Autosize,                !- Maximum Water Flow Rate {m3/s}
+  <%= zone_name %> UH Coil HW Inlet Node,  !- Water Inlet Node Name
+  <%= zone_name %> UH Coil HW Outlet Node,  !- Water Outlet Node Name
+  <%= zone_name %> UH Fan Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> UH Outlet Node,  !- Air Outlet Node Name
+  UFactorTimesAreaAndDesignWaterFlowRate,  !- Performance Input Method
+  Autosize,                !- Rated Capacity {W}
+  ,                        !- Rated Inlet Water Temperature {C}
+  ,                        !- Rated Inlet Air Temperature {C}
+  ,                        !- Rated Outlet Water Temperature {C}
+  ;                        !- Rated Outlet Air Temperature {C}
+
+Branch,
+  <%= zone_name %> HW Demand Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Coil:Heating:Water,      !- Component 1 Object Type
+  <%= zone_name %> UH Coil,  !- Component 1 Name
+  <%= zone_name %> UH Coil HW Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> UH Coil HW Outlet Node;  !- Component 1 Outlet Node Name
+<% end %>
+
+ZoneVentilation:DesignFlowRate,
+  <%= zone_name %> Ventilation,  !- Name
+  <%= zone_name %>,  !- Zone or ZoneList Name
+  <%= zone_name %> Ventilation Sched,  !- Schedule Name
+  Flow/Area,               !- Design Flow Rate Calculation Method
+  ,                        !- Design Flow Rate {m3/s}
+  <%= flow_area_intakevent %>,                        !- Flow Rate per Zone Floor Area {m3/s-m2}
+  ,                        !- Flow Rate per Person {m3/s-person}
+  ,                        !- Air Changes per Hour
+  Intake,                  !- Ventilation Type
+  <%= fan_rise_intakevent %>,                        !- Fan Pressure Rise {Pa}
+  <%= fan_eff_intakevent %>,                        !- Fan Total Efficiency
+  1.0,                     !- Constant Term Coefficient
+  0,                       !- Temperature Term Coefficient
+  0,                       !- Velocity Term Coefficient
+  0,                       !- Velocity Squared Term Coefficient
+  <%= min_temp_intakevent %>,         !- Minimum Indoor Temperature {C}
+  ,                        !- Minimum Indoor Temperature Schedule Name
+  ,                        !- Maximum Indoor Temperature {C}
+  ,                        !- Maximum Indoor Temperature Schedule Name
+  ,                        !- Delta Temperature {deltaC}
+  ,                        !- Delta Temperature Schedule Name
+  ,                        !- Minimum Outdoor Temperature {C}
+  ,                        !- Minimum Outdoor Temperature Schedule Name
+  ,                        !- Maximum Outdoor Temperature {C}
+  ,                        !- Maximum Outdoor Temperature Schedule Name
+  ;                        !- Maximum Wind Speed {m/s}
+
+Schedule:Compact,
+  <%= zone_name %> Ventilation Sched,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule_intakevent %>

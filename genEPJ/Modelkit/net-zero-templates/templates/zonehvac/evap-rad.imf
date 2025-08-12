@@ -1,0 +1,208 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "heating_setpoint", :default=>70|'F'
+parameter "cooling_setpoint", :default=>75|'F'
+
+parameter "heating_setpoint_sch", :default=>nil
+parameter "cooling_setpoint_sch", :default=>nil
+
+parameter "oa_method", :default=>"Sum"
+parameter "oa_person", :default=>0|'CFM'
+parameter "oa_area", :default=>0|'CFM/ft2'
+parameter "oa_zone", :default=>0|'CFM'
+
+parameter "zone_area"  # Required because radiant slab does not autosize
+parameter "radiant_heating_type", :default=>"ELECTRIC" # ( NONE | ELECTRIC | HOTWATER )
+parameter "radiant_cooling_type", :default=>"NONE" # ( NONE | CHILLEDWATER )
+
+parameter "radiant_control_type", :default=>"OPT"  # Radiant control temperature (MAT | MRT | OPT)
+parameter "radiant_tube_diameter", :default=>0.013|'m'  # Radiant tube diameter (m) - yes, meters because Clina uses SI
+parameter "radiant_flow_sizing", :default=>0.6  # Rated flow rate sizing factor (m3/s per 1000000 m2)
+
+parameter "radiant_supp_hw_temp", :default=>140|'F'  # Radiant supply hot water temperature
+parameter "radiant_supp_cw_temp", :default=>55|'F'  # Radiant supply chilled water temperature
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+
+parameter "evap_fan_eff", :default=>0.25
+parameter "evap_fan_rise", :default=>1.0|'in H2O'
+parameter "evap_fan_flow", :default=>"Autosize"
+
+parameter "operation_schedule", :default=>
+"
+    Through: 12/31,          !- Field 1
+    For: AllDays,            !- Field 2
+    Until: 24:00, 1.0;       !- Field 3
+"
+%>
+
+  Sizing:Zone,
+    <%= zone_name %>,        !- Zone or ZoneList Name
+    SupplyAirTemperature,    !- Zone Cooling Design Supply Air Temperature Input Method
+    12.78,                   !- Zone Cooling Design Supply Air Temperature {C}
+    ,                        !- Zone Cooling Design Supply Air Temperature Difference {deltaC}
+    SupplyAirTemperature,    !- Zone Heating Design Supply Air Temperature Input Method
+    45,                      !- Zone Heating Design Supply Air Temperature {C}
+    ,                        !- Zone Heating Design Supply Air Temperature Difference {deltaC}
+    0.0085,                  !- Zone Cooling Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+    0.0080,                  !- Zone Heating Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+    <%= zone_name %> Design OA,  !- Design Specification Outdoor Air Object Name
+    ,                        !- Zone Heating Sizing Factor
+    ,                        !- Zone Cooling Sizing Factor
+    DesignDay,               !- Cooling Design Air Flow Method
+    ,                        !- Cooling Design Air Flow Rate {m3/s}
+    ,                        !- Cooling Minimum Air Flow per Zone Floor Area {m3/s-m2}
+    ,                        !- Cooling Minimum Air Flow {m3/s}
+    ,                        !- Cooling Minimum Air Flow Fraction
+    DesignDay,               !- Heating Design Air Flow Method
+    ,                        !- Heating Design Air Flow Rate {m3/s}
+    ,                        !- Heating Maximum Air Flow per Zone Floor Area {m3/s-m2}
+    ,                        !- Heating Maximum Air Flow {m3/s}
+    ;                        !- Heating Maximum Air Flow Fraction
+
+  DesignSpecification:OutdoorAir,
+    <%= zone_name %> Design OA,  !- Name
+    <%= oa_method %>,            !- Outdoor Air Method
+    <%= oa_person %>,            !- Outdoor Air Flow per Person {m3/s-person}
+    <%= oa_area %>,              !- Outdoor Air Flow per Zone Floor Area {m3/s-m2}
+    <%= oa_zone %>;              !- Outdoor Air Flow per Zone {m3/s}
+
+<% if (heating_setpoint_sch) %>
+  Schedule:Compact,
+    <%= zone_name %> Heating Setpoint Sch,  !- Name
+    Any Number,              !- Schedule Type Limits Name
+<%= heating_setpoint_sch %>
+<% else %>
+  Schedule:Constant,
+    <%= zone_name %> Heating Setpoint Sch,  !- Name
+    Any Number,              !- Schedule Type Limits Name
+    <%= heating_setpoint %>;  !- Hourly Value
+<% end %>
+
+<% if (cooling_setpoint_sch) %>
+  Schedule:Compact,
+    <%= zone_name %> Cooling Setpoint Sch,  !- Name
+    Any Number,              !- Schedule Type Limits Name
+<%= cooling_setpoint_sch %>
+<% else %>
+  Schedule:Constant,
+    <%= zone_name %> Cooling Setpoint Sch,  !- Name
+    Any Number,              !- Schedule Type Limits Name
+    <%= cooling_setpoint %>;  !- Hourly Value
+<% end %>
+
+  Schedule:Compact,
+    <%= zone_name %> Operation Schedule,  !- Name
+    On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+  Schedule:Constant,
+    <%= zone_name %> Always On Schedule,  !- Name
+    Any Number,              !- Schedule Type Limits Name
+    1.0;            !- Hourly Value
+
+  ZoneControl:Thermostat,
+    <%= zone_name %> Thermostat,  !- Name
+    <%= zone_name %>,    !- Zone or ZoneList Name
+    <%= zone_name %> Thermostat Type Sched,  !- Control Type Schedule Name
+    ThermostatSetpoint:DualSetpoint,  !- Control 1 Object Type
+    <%= zone_name %> Setpoints;  !- Control 1 Name
+
+  Schedule:Constant,
+    <%= zone_name %> Thermostat Type Sched,  !- Name
+    Control Type,            !- Schedule Type Limits Name
+    4;                       !- Hourly Value
+
+  ThermostatSetpoint:DualSetpoint,
+    <%= zone_name %> Setpoints,  !- Name
+    <%= zone_name %> Heating Setpoint Sch,  !- Heating Setpoint Temperature Schedule Name
+    <%= zone_name %> Cooling Setpoint Sch;  !- Cooling Setpoint Temperature Schedule Name
+
+  ZoneHVAC:EquipmentConnections,
+    <%= zone_name %>,        !- Zone Name
+    <%= zone_name %> Equipment,  !- Zone Conditioning Equipment List Name
+    <%= zone_name %> Inlet Nodes,  !- Zone Air Inlet Node or NodeList Name
+    <%= zone_name %> Exhaust Nodes,       !- Zone Air Exhaust Node or NodeList Name
+    <%= zone_name %> Air Node,  !- Zone Air Node Name
+    <%= zone_name %> Return Node;  !- Zone Return Air Node Name
+
+  NodeList,
+    <%= zone_name %> Inlet Nodes,  !- Name
+    <%= zone_name %> Evaporative Cooler Outlet Node;  !- Node 1 Name
+
+  NodeList,
+    <%= zone_name %> Exhaust Nodes,  !- Name
+<% if (exhaust_fan) %>
+    <%= zone_name %> Exhaust Fan Inlet Node,       !- Node 1 Name
+    <%= zone_name %> Evaporative Cooler Relief Node;  !- Node 2 Name
+<% else %>
+    <%= zone_name %> Evaporative Cooler Relief Node;  !- Node 1 Name
+<% end %>
+
+<% if (exhaust_fan) %>
+  ZoneHVAC:EquipmentList,
+    <%= zone_name %> Equipment,  !- Name
+    SequentialLoad,  !- Load Distribution Scheme
+    Fan:ZoneExhaust,         !- Zone Equipment 1 Object Type
+    <%= zone_name %> Exhaust Fan,  !- Zone Equipment 1 Name
+    1,                       !- Zone Equipment 1 Cooling Sequence
+    1,                       !- Zone Equipment 1 Heating or No-Load Sequence
+    ZoneHVAC:EvaporativeCoolerUnit,  !- Zone Equipment 2 Object Type
+    <%= zone_name %> Evaporative Cooler,  !- Zone Equipment 2 Name
+    2,                       !- Zone Equipment 2 Cooling Sequence
+    3,                       !- Zone Equipment 2 Heating or No-Load Sequence
+<% if radiant_heating_type == "ELECTRIC" %>
+    ZoneHVAC:LowTemperatureRadiant:Electric,  !- Zone Equipment 1 Object Type
+<% else %>
+    ZoneHVAC:LowTemperatureRadiant:ConstantFlow,  !- Zone Equipment 1 Object Type
+<% end %>
+    <%= zone_name %> Radiant,  !- Zone Equipment 1 Name
+    3,                       !- Zone Equipment 1 Cooling Priority
+    2;                       !- Zone Equipment 1 Heating Priority
+<% else %>
+  ZoneHVAC:EquipmentList,
+    <%= zone_name %> Equipment,  !- Name
+    SequentialLoad,  !- Load Distribution Scheme
+    ZoneHVAC:EvaporativeCoolerUnit,  !- Zone Equipment 1 Object Type
+    <%= zone_name %> Evaporative Cooler,  !- Zone Equipment 1 Name
+    1,                       !- Zone Equipment 1 Cooling Sequence
+    2,                       !- Zone Equipment 1 Heating or No-Load Sequence
+<% if radiant_heating_type == "ELECTRIC" %>
+    ZoneHVAC:LowTemperatureRadiant:Electric,  !- Zone Equipment 1 Object Type
+<% else %>
+    ZoneHVAC:LowTemperatureRadiant:ConstantFlow,  !- Zone Equipment 1 Object Type
+<% end %>
+    <%= zone_name %> Radiant,  !- Zone Equipment 1 Name
+    2,                       !- Zone Equipment 1 Cooling Priority
+    1;                       !- Zone Equipment 1 Heating Priority
+
+<% end %>
+
+<%= insert 'zonehvac/equipment/evap.imf',
+    :zone_name=>zone_name,
+    :exhaust_fan=>exhaust_fan,
+    :exhaust_fan_eff=>exhaust_fan_eff,
+    :exhaust_fan_rise=>exhaust_fan_rise,
+    :exhaust_fan_flow=>exhaust_fan_flow,
+    :evap_fan_eff=>evap_fan_eff,
+    :evap_fan_rise=>evap_fan_rise,
+    :evap_fan_flow=>evap_fan_flow
+%>
+
+<%= insert 'zonehvac/equipment/radiant.imf',
+  :zone_name=>zone_name,
+  :zone_area=>zone_area,
+  :radiant_heating_type=>radiant_heating_type,
+  :radiant_cooling_type=>radiant_cooling_type,
+  :radiant_control_type=>radiant_control_type,
+  :radiant_tube_diameter=>radiant_tube_diameter,
+  :radiant_flow_sizing=>radiant_flow_sizing,
+  :radiant_supp_hw_temp=>radiant_supp_hw_temp,
+  :radiant_supp_cw_temp=>radiant_supp_cw_temp,
+  :heating_setpoint=>heating_setpoint,
+  :cooling_setpoint=>cooling_setpoint
+%>
