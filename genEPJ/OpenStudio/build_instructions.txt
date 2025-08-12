@@ -1,0 +1,17 @@
+
+
+Install OpenStudio SDK using .deb (debtap tool in Arch)
+
+Install ruby bindings:
+
+/usr/local/openstudio-3.3.0/Ruby
+
+bundle install            # Install dependencies via the Gemfile
+gem install bundler:2.1.4 # if missing
+rbenv install 2.7.0       # if incorrect ruby version
+rbenv global 2.7.0 # Switch to 2.7.0
+bundle install            # Install dependencies via the Gemfile
+
+
+NOTE- no need to call ruby in script. OpenStudio *is* a ruby interpreter. Call 'openstudio' instead
+

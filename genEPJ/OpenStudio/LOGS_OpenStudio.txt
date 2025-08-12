@@ -1,0 +1,8 @@
+**ENVIRONMENT**:
+  > Found `openstudio' in PATH
+**TEMPLATES**:
+  > Found OpenStudio templates: Measures and Workflows
+**Flow**:
+  > Entering `dispatch_openstudio' function
+**Flow**:
+  > Created IDF input file: /tmp/tmpnqayz9ql_openstudio/start.idf

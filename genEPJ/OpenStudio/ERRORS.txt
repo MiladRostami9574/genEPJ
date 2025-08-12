@@ -1,0 +1,40 @@
+
+DUMMY- Can convert osm->idf, but not idf->osm (year/weather errors).
+> FIX: REMOVE OS:WeatherFile (convert back), then update Year in RunPeriod and it works...
+
+
+dummy.idf
+...
+[openstudio.model.ScheduleYear] <1> Assumed base year 2009 of untilDate does not match this model's assumed base year of 2012
+[openstudio.model.YearDescription] <1> 'UseWeatherFile' is selected in YearDescription, but there are no weather file set for the model.
+
+nomad
+...
+[openstudio.model.ScheduleYear] <1> Assumed base year 2009 of untilDate does not match this model's assumed base year of 2007
+
+Assumed base year 2009 of untilDate does not match this model's assumed base year of 2007...
+> Fixed by changing RunPeriod Year from '2007' to '2009'
+
+UseWeatherFile fixed by deleting block (??):
+"""
+OS:WeatherFile,
+  {723b8b41-fedf-4006-b2ea-df5318b05b7b}, !- Handle
+  Golden,                                 !- City
+  CO,                                     !- State Province Region
+  USA,                                    !- Country
+  Custom-724666,                          !- Data Source
+  724666,                                 !- WMO Number
+  39.74,                                  !- Latitude {deg}
+  -105.18,                                !- Longitude {deg}
+  -7,                                     !- Time Zone {hr}
+  1829,                                   !- Elevation {m}
+  file:files/SRRL_2012AMY_60min.epw,      !- Url
+  D8B625BE;                               !- Checksum
+"""
+
+
+[openstudio.model.YearDescription] <1> 'UseWeatherFile' is selected in YearDescription, but there are no weather file set for the model.
+> From './src/model/YearDescription.cpp'
+void YearDescription_Impl::resetIsLeapYear() {}
+> Appears to originate from HVAC objects...
+> Add OS:WeatherFile back into OSM translation?
