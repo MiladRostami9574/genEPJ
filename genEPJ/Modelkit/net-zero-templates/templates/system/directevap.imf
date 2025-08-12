@@ -1,0 +1,378 @@
+<%#INITIALIZE
+parameter "system_name"
+
+parameter "zone_names"
+
+parameter "return_plenum_zone_name", :default=>nil
+
+parameter "oa_economizer", :default=>true
+parameter "oa_econ_high_limit", :default=>75|'F'   # Maximum outdoor air temperature for economizer operation (depends on climate zone for ASHRAE 90.1)
+
+parameter "oa_dir_evap_eff", :default=>1.0
+
+parameter "night_cycle", :default=>false
+
+parameter "supply_temp", :default=>55|'F'
+
+parameter "fan_eff_supply", :default=>0.65
+parameter "fan_rise_supply", :default=>3.0|'in H2O'
+parameter "fan_flow_supply", :default=>"Autosize"
+
+parameter "fan_eff_return", :default=>0.65
+parameter "fan_rise_return", :default=>2.25|'in H2O'
+parameter "fan_flow_return", :default=>"Autosize"
+
+parameter "operation_schedule", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+
+parameter "clear_water_supply_tank", :default=>"" # variable used to create tank to supply clear water for evaporative cooling
+%>
+
+AirLoopHVAC,
+  <%= system_name %>,  !- Name
+  ,  !- Controller List Name
+  <%= system_name %> Availability Manager List,  !- Availability Manager List Name
+  Autosize,                !- Design Supply Air Flow Rate {m3/s}
+  <%= system_name %> Branch List,  !- Branch List Name
+  ,                        !- Connector List Name
+  <%= system_name %> Supply Equipment Inlet Node,  !- Supply Side Inlet Node Name
+  <%= system_name %> Zone Equipment Outlet Node,  !- Demand Side Outlet Node Name
+  <%= system_name %> Zone Equipment Inlet Node,  !- Demand Side Inlet Node Names
+  <%= system_name %> Supply Equipment Outlet Node;  !- Supply Side Outlet Node Names
+
+Sizing:System,
+  <%= system_name %>,      !- AirLoop Name
+  Sensible,                !- Type of Load to Size On
+  Autosize,                !- Design Outdoor Air Flow Rate {m3/s}
+  1.0,                     !- Central Heating Maximum System Air Flow Ratio
+  7.0,                     !- Preheat Design Temperature {C}
+  0.008,                   !- Preheat Design Humidity Ratio {kg-H2O/kg-Air}
+  11.0,                    !- Precool Design Temperature {C}
+  0.008,                   !- Precool Design Humidity Ratio {kg-H2O/kg-Air}
+  <%= supply_temp %>,  !- Central Cooling Design Supply Air Temperature {C}
+  <%= supply_temp %>,  !- Central Heating Design Supply Air Temperature {C}
+  Coincident,              !- Type of Zone Sum to Use
+  No,                      !- 100% Outdoor Air in Cooling
+  No,                      !- 100% Outdoor Air in Heating
+  0.0085,                  !- Central Cooling Design Supply Air Humidity Ratio {kg-H2O/kg-Air}
+  0.0080,                  !- Central Heating Design Supply Air Humidity Ratio {kg-H2O/kg-Air}
+  DesignDay,               !- Cooling Supply Air Flow Rate Method
+  ,                        !- Cooling Supply Air Flow Rate {m3/s}
+  ,                        !- Cooling Supply Air Flow Rate Per Floor Area {m3/s-m2}
+  ,                        !- Cooling Fraction of Autosized Cooling Supply Air Flow Rate
+  ,                        !- Cooling Supply Air Flow Rate Per Unit Cooling Capacity {m3/s-W}
+  DesignDay,               !- Heating Supply Air Flow Rate Method
+  ,                        !- Heating Supply Air Flow Rate {m3/s}
+  ,                        !- Heating Supply Air Flow Rate Per Floor Area {m3/s-m2}
+  ,                        !- Heating Fraction of Autosized Heating Supply Air Flow Rate
+  ,                        !- Heating Fraction of Autosized Cooling Supply Air Flow Rate
+  ,                        !- Heating Supply Air Flow Rate Per Unit Heating Capacity {m3/s-W}
+  ,                        !- System Outdoor Air Method
+  1.0,                     !- Zone Maximum Outdoor Air Fraction {dimensionless}
+  CoolingDesignCapacity,   !- Cooling Design Capacity Method
+  Autosize,                !- Cooling Design Capacity {W}
+  ,                        !- Cooling Design Capacity Per Floor Area {W/m2}
+  ,                        !- Fraction of Autosized Cooling Design Capacity
+  HeatingDesignCapacity,   !- Heating Design Capacity Method
+  Autosize,                !- Heating Design Capacity {W}
+  ,                        !- Heating Design Capacity Per Floor Area {W/m2}
+  ,                        !- Fraction of Autosized Heating Design Capacity
+  OnOff;                   !- Central Cooling Capacity Control Method
+
+Schedule:Constant,
+  <%= system_name %> Always On Schedule,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  1;                       !- Hourly Value
+
+Schedule:Compact,
+  <%= system_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+<%# Must be separate from Operation Schedule; Operation Schedule is forced on by night cycle. %>
+Schedule:Compact,
+  <%= system_name %> Outdoor Air Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+<% if (night_cycle) %>
+AvailabilityManagerAssignmentList,
+  <%= system_name %> Availability Manager List,  !- Name
+  AvailabilityManager:NightCycle,  !- Availability Manager 1 Object Type
+  <%= system_name %> Availability Manager;  !- Availability Manager 1 Name
+
+<%# NOTE:  NightCycle does not affect ALL objects that reference the specified Fan Schedule Name; it only influences
+the fan objects connected to this air system with that schedule.
+NOTE2:  NightCycle also activates the outdoor air system when the fans turn on.  If outdoor air should be off
+for night cycling, specify a different schedule for Minimum Outdoor Air Schedule Name on Controller:OutdoorAir.
+*DOAS NOTE:  DOAS should only cycle the zone fan coil units...but unfortunately this doesn't work.
+%>
+AvailabilityManager:NightCycle,
+  <%= system_name %> Availability Manager,  !- Name
+  <%= system_name %> Always On Schedule,  !- Applicability Schedule Name
+  <%= system_name %> Operation Schedule,  !- Fan Schedule Name
+  CycleOnAny,              !- Control Type
+  1.0,                     !- Thermostat Tolerance {deltaC}
+  FixedRunTime,            !- Cycling Run Time Control Type
+  1800;                    !- Cycling Run Time {s}
+<% else %>
+AvailabilityManagerAssignmentList,
+  <%= system_name %> Availability Manager List,  !- Name
+  AvailabilityManager:Scheduled,  !- Availability Manager 1 Object Type
+  <%= system_name %> Availability Manager;  !- Availability Manager 1 Name
+
+<%# NOTE: Operation Schedule is the only thing that seems to be able to turn off the fans during unoccupied hours. %>
+AvailabilityManager:Scheduled,
+  <%= system_name %> Availability Manager,  !- Name
+  <%= system_name %> Operation Schedule;  !- Schedule Name
+<% end %>
+
+BranchList,
+  <%= system_name %> Branch List,  !- Name
+  <%= system_name %> Main Branch;  !- Branch 1 Name
+
+Branch,
+  <%= system_name %> Main Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Fan:VariableVolume,      !- Component 1 Object Type
+  <%= system_name %> Return Fan,   !- Component 1 Name
+  <%= system_name %> Supply Equipment Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> ExhFan-OA Node,  !- Component 1 Outlet Node Name
+  AirLoopHVAC:OutdoorAirSystem,  !- Component 1 Object Type
+  <%= system_name %> OA System,    !- Component 1 Name
+  <%= system_name %> ExhFan-OA Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> OA Outlet Node,  !- Component 1 Outlet Node Name
+  Fan:VariableVolume,      !- Component 4 Object Type
+  <%= system_name %> Supply Fan,   !- Component 4 Name
+  <%= system_name %> OA Outlet Node, !- Component 3 Inlet Node Name
+  <%= system_name %> Supply Equipment Outlet Node;  !- Component 4 Outlet Node Name
+
+Fan:VariableVolume,
+  <%= system_name %> Return Fan,  !- Name
+  <%= system_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= fan_eff_return %>,   !- Fan Efficiency
+  <%= fan_rise_return %>,  !- Pressure Rise {Pa}
+  <%= fan_flow_return %>,  !- Maximum Flow Rate {m3/s}
+  Fraction,                !- Fan Power Minimum Flow Rate Input Method
+  0.0,                     !- Fan Power Minimum Flow Fraction {}
+  ,                        !- Fan Power Minimum Flow Rate {m3/s}
+  0.85,                    !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  0.0013,                  !- Fan Power Coefficient 1
+  0.147,                   !- Fan Power Coefficient 2
+  0.9506,                  !- Fan Power Coefficient 3
+  -0.0998,                 !- Fan Power Coefficient 4
+  0.0,                     !- Fan Power Coefficient 5
+  <%= system_name %> Supply Equipment Inlet Node,  !- Air Inlet Node Name
+  <%= system_name %> ExhFan-OA Node;  !- Air Outlet Node Name
+
+AirLoopHVAC:OutdoorAirSystem,
+  <%= system_name %> OA System,  !- Name
+  <%= system_name %> OA Controllers,  !- Controller List Name
+  <%= system_name %> OA Equipment,  !- Outdoor Air Equipment List Name
+  <%= system_name %> Availability Manager List;  !- Availability Manager List Name
+
+AirLoopHVAC:ControllerList,
+  <%= system_name %> OA Controllers,  !- Name
+  Controller:OutdoorAir,   !- Controller 1 Object Type
+  <%= system_name %> OA Controller;  !- Controller 1 Name
+
+AirLoopHVAC:OutdoorAirSystem:EquipmentList,
+  <%= system_name %> OA Equipment,  !- Name
+  EvaporativeCooler:Direct:ResearchSpecial,  !- Component Object Type
+  <%= system_name %> Direct Evap Cooler,  !- Component Name
+  OutdoorAir:Mixer,        !- Component Object Type
+  <%= system_name %> OA Mixer;     !- Component Name
+
+OutdoorAir:Node,
+  <%= system_name %> Outside Air Inlet Node;  !- Name
+
+EvaporativeCooler:Direct:ResearchSpecial,
+  <%= system_name %> Direct Evap Cooler,  !- Name
+  <%= system_name %> Always On Schedule,  !- Availability Schedule Name
+  <%= oa_dir_evap_eff %>,  !- Cooler Design Effectiveness
+  ,                    !- Effectiveness Flow Ratio Modifier Curve Name
+  Autosize,                    !- Primary Air Design Flow Rate {m3/s}
+  30.0,                    !- Recirculating Water Pump Design Power {W}
+  ,                    !- Water Pump Power Sizing Factor {W/(m3/s)}
+  ,                    !- Water Pump Power Modifier Curve Name
+  <%= system_name %> Outside Air Inlet Node,  !- Air Inlet Node Name
+  <%= system_name %> EC Outlet Node,  !- Air Outlet Node Name
+  <%= system_name %> EC Outlet Node,  !- Sensor Node Name
+  <%= clear_water_supply_tank %>,                        !- Water Supply Storage Tank Name
+  0.0,                     !- Drift Loss Fraction
+  3;                       !- Blowdown Concentration Ratio
+
+SetpointManager:OutdoorAirPretreat,
+  <%= system_name %> OA Setpoint Manager,  !- Name
+  Temperature,             !- Control Variable
+  ,                        !- Minimum Setpoint Temperature {C}
+  ,                        !- Maximum Setpoint Temperature {C}
+  ,                        !- Minimum Setpoint Humidity Ratio {kgWater/kgDryAir}
+  ,                        !- Maximum Setpoint Humidity Ratio {kgWater/kgDryAir}
+  <%= system_name %> OA Outlet Node,  !- Reference Setpoint Node Name
+  <%= system_name %> OA Outlet Node,  !- Mixed Air Stream Node Name
+  <%= system_name %> Outside Air Inlet Node,  !- Outdoor Air Stream Node Name
+  <%= system_name %> ExhFan-OA Node,  !- Return Air Stream Node Name
+  <%= system_name %> OA Setpoint Nodes;  !- Setpoint Node or NodeList Name
+
+NodeList,
+  <%= system_name %> OA Setpoint Nodes,  !- Name
+  <%= system_name %> EC Outlet Node,  !- Node Name
+<%# Include OA Inlet Node just to be able to terminate the NodeList cleanly. %>
+  <%= system_name %> Outside Air Inlet Node;  !- Node Name
+
+OutdoorAir:Mixer,
+  <%= system_name %> OA Mixer,  !- Name
+  <%= system_name %> OA Outlet Node,  !- Mixed Air Node Name
+  <%= system_name %> EC Outlet Node,  !- Outdoor Air Stream Node Name
+  <%= system_name %> OA Relief Node,  !- Relief Air Stream Node Name
+  <%= system_name %> ExhFan-OA Node;  !- Return Air Stream Node Name
+
+<%#
+NOTE: There is a problem with the controls on HeatExchanger:AirToAir:SensibleAndLatent. The bypass controls only
+appear to work if an economizer is enabled AND actively operating. Otherwise the Supply Air Outlet Temperature Control
+is ignored, even with the proper setpoint manager.
+
+In general, this means that energy recovery WITHOUT an economizer is a bad combination. Under some conditions the
+energy recovery wheel will overheat the outdoor air and result in unnecessary cooling. There is no apparent
+workaround, although an EMS override might be possible.
+
+For DOAS--which does not normally economize--Economizer Control Type should be set to FixedDryBulb (or similar--
+just not NoEconomizer) in order to use energy recovery. ALSO (need to recheck): Setting the Economizer Minimum Limit
+to SAT - 1.0 C (roughly optimal), disables the economizer below this value and allows heat recovery to operate; above
+the value locks it out.
+%>
+
+Controller:OutdoorAir,
+  <%= system_name %> OA Controller,  !- Name
+  <%= system_name %> OA Relief Node,  !- Relief Air Outlet Node Name
+  <%= system_name %> ExhFan-OA Node,  !- Return Air Node Name
+  <%= system_name %> OA Outlet Node,  !- Mixed Air Node Name
+  <%= system_name %> Outside Air Inlet Node,  !- Actuator Node Name
+  Autosize,                !- Minimum Outdoor Air Flow Rate {m3/s}
+  Autosize,                !- Maximum Outdoor Air Flow Rate {m3/s}
+<% if (oa_economizer) %>
+  DifferentialDryBulb,    !- Economizer Control Type
+<% else %>
+  NoEconomizer,            !- Economizer Control Type
+<% end %>
+  ModulateFlow,            !- Economizer Control Action Type
+  <%= oa_econ_high_limit %>,      !- Economizer Maximum Limit Dry-Bulb Temperature {C}
+  ,                        !- Economizer Maximum Limit Enthalpy {J/kg}
+  ,                        !- Economizer Maximum Limit Dewpoint Temperature {C}
+  ,                        !- Electronic Enthalpy Limit Curve Name
+  ,                        !- Economizer Minimum Limit Dry-Bulb Temperature {C}
+  NoLockout,               !- Lockout Type
+  FixedMinimum,            !- Minimum Limit Type
+<%# NOTE:  Not working right yet...Outdoor Air Schedule is not being honored when the fan cycles on at night. %>
+  ,  !- Minimum Outdoor Air Schedule Name
+  ,                        !- Minimum Fraction of Outdoor Air Schedule Name
+  ,                        !- Maximum Fraction of Outdoor Air Schedule Name
+  ,                        !- Mechanical Ventilation Controller Name
+  ,                        !- Time of Day Economizer Control Schedule Name
+  ,                        !- High Humidity Control
+  ,                        !- Humidistat Control Zone Name
+  ,                        !- High Humidity Outdoor Air Flow Ratio
+  ,                        !- Control High Indoor Humidity Based on Outdoor Humidity Ratio
+  BypassWhenWithinEconomizerLimits;  !- Heat Recovery Bypass Control Type
+
+Output:Variable,<%= system_name %> Supply Equipment Inlet Node,System Node Temperature,hourly;
+
+Output:Variable,<%= system_name %> Supply Equipment Outlet Node,System Node Temperature,hourly;
+Output:Variable,<%= system_name %> Supply Equipment Outlet Node,System Node Mass Flow Rate,hourly;
+Output:Variable,<%= system_name %> Supply Equipment Outlet Node,System Node Setpoint Temperature,hourly;
+
+Output:Variable,<%= system_name %> EC Outlet Node,System Node Temperature,hourly;
+Output:Variable,<%= system_name %> EC Outlet Node,System Node Mass Flow Rate,hourly;
+
+Output:Variable,<%= system_name %> Outside Air Inlet Node,System Node Temperature,hourly;
+
+SetpointManager:MixedAir,
+  <%= system_name %> Supply Setpoint Manager,  !- Name
+  Temperature,             !- Control Variable
+  <%= system_name %> Supply Equipment Outlet Node,  !- Reference Setpoint Node Name
+  <%= system_name %> OA Outlet Node, !- Fan Inlet Node Name
+  <%= system_name %> Supply Equipment Outlet Node,  !- Fan Outlet Node Name
+  <%= system_name %> Supply Setpoint Nodes;  !- Setpoint Node or NodeList Name
+
+NodeList,
+  <%= system_name %> Supply Setpoint Nodes,  !- Name
+  <%= system_name %> OA Outlet Node;  !- Node Name
+
+Fan:VariableVolume,
+  <%= system_name %> Supply Fan,  !- Name
+  <%= system_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= fan_eff_supply %>,   !- Fan Efficiency
+  <%= fan_rise_supply %>,  !- Pressure Rise {Pa}
+  <%= fan_flow_supply %>,  !- Maximum Flow Rate {m3/s}
+  Fraction,                !- Fan Power Minimum Flow Rate Input Method
+  0.0,                     !- Fan Power Minimum Flow Fraction {}
+  ,                        !- Fan Power Minimum Flow Rate {m3/s}
+  0.85,                    !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  0.0013,                  !- Fan Power Coefficient 1
+  0.147,                   !- Fan Power Coefficient 2
+  0.9506,                  !- Fan Power Coefficient 3
+  -0.0998,                 !- Fan Power Coefficient 4
+  0.0,                     !- Fan Power Coefficient 5
+  <%= system_name %> OA Outlet Node, !- Air Inlet Node Name
+  <%= system_name %> Supply Equipment Outlet Node;  !- Air Outlet Node Name
+
+SetpointManager:MultiZone:Cooling:Average,
+  <%= system_name %> SAT Setpoint Manager,  !- Name
+  <%= system_name %>,      !- HVAC Air Loop Name
+  <%= supply_temp %>,      !- Minimum Setpoint Temperature {C}
+  <%= 120|'F' %>,          !- Maximum Setpoint Temperature {C}
+  <%= system_name %> Supply Equipment Outlet Node;  !- Setpoint Node or NodeList Name
+
+AirLoopHVAC:SupplyPath,
+  <%= system_name %>,             !- Name
+  <%= system_name %> Zone Equipment Inlet Node,  !- Supply Air Path Inlet Node Name
+  AirLoopHVAC:ZoneSplitter,  !- Component 1 Object Type
+  <%= system_name %> Supply Air Splitter;  !- Component 1 Name
+
+AirLoopHVAC:ZoneSplitter,
+  <%= system_name %> Supply Air Splitter,  !- Name
+  <%= system_name %> Zone Equipment Inlet Node,  !- Inlet Node Name
+<% for zone_name in zone_names[0..-2] %>
+  <%= zone_name %> ATU Inlet Node,  !- Outlet Node Name
+<% end %>
+  <%= zone_names[-1] %> ATU Inlet Node;  !- Outlet Node Name
+
+AirLoopHVAC:ReturnPath,
+  <%= system_name %> Return Air Path,    !- Name
+  <%= system_name %> Zone Equipment Outlet Node,  !- Return Air Path Outlet Node Name
+<% if (return_plenum_zone_name) %>
+  AirLoopHVAC:ReturnPlenum,   !- Component 1 Object Type
+  <%= system_name %> Return Plenum;   !- Component 1 Name
+<% else %>
+  AirLoopHVAC:ZoneMixer,   !- Component 1 Object Type
+  <%= system_name %> Return Air Mixer;   !- Component 1 Name
+<% end %>
+
+<% if (return_plenum_zone_name) %>
+AirLoopHVAC:ReturnPlenum,
+  <%= system_name %> Return Plenum, ! Name
+  <%= return_plenum_zone_name %>, ! Zone Name
+  <%= return_plenum_zone_name %> Node, ! Zone Node Name
+  <%= system_name %> Zone Equipment Outlet Node,  !- Outlet Node Name
+  , !- Induced Air Outlet Node or NodeList Name
+<% for zone_name in zone_names[0..-2] %>
+  <%= zone_name %> Return Node,  !- Inlet Node Name
+<% end %>
+  <%= zone_names[-1] %> Return Node;  !- Inlet Node Name
+
+<% else %>
+AirLoopHVAC:ZoneMixer,
+  <%= system_name %> Return Air Mixer,   !- Name
+  <%= system_name %> Zone Equipment Outlet Node,  !- Outlet Node Name
+<% for zone_name in zone_names[0..-2] %>
+  <%= zone_name %> Return Node,  !- Inlet Node Name
+<% end %>
+  <%= zone_names[-1] %> Return Node;  !- Inlet Node Name
+<% end %>
