@@ -1,0 +1,7 @@
+Roadmap items for future development of genEPJ:
+
+- Expand resilience-oriented examples and supporting workflow materials.
+- Extend the optimization module with pathway and backtracking analysis.
+- Explore surrogate-model support for faster screening workflows.
+- Continue porting selected external template logic into native genEPJ
+  formats.
