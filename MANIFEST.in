@@ -1,0 +1,6 @@
+recursive-include genEPJ/templateGenerator_epJSON *.json
+recursive-include genEPJ/templates *.idf *.csv
+recursive-include genEPJ/Modelkit *.pxt *.imf *.xlsx *.txt *.md
+recursive-include examples *.idf *.json *.py *.md *.sh makefile
+recursive-include notebooks *.ipynb
+recursive-include docs *.md

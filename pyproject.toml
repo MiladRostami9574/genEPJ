@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genEPJ"
+version = "1.0.1"
+description = "Python automation framework for EnergyPlus model generation and modification."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Milad Rostami"},
+    {name = "Scott Bucking"}
+]
+dependencies = [
+    "numpy>=1.21",
+    "numpy-financial>=1.0.0",
+    "pandas>=1.3",
+    "platypus-opt>=1.0",
+    "eppy>=0.5"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "jupyter>=1.0"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["genEPJ*"]
+
+[tool.setuptools.package-data]
+genEPJ = [
+    "templateGenerator_epJSON/*.json",
+    "templates/*.idf",
+    "templates/*.csv",
+    "Modelkit/net-zero-templates/**/*.pxt",
+    "Modelkit/net-zero-templates/**/*.imf",
+    "Modelkit/net-zero-templatesv9/**/*.pxt",
+    "Modelkit/net-zero-templatesv9/**/*.imf"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "energyplus: tests that require EnergyPlus to be installed and available on PATH"
+]
