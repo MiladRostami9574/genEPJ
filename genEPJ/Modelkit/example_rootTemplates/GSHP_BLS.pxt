@@ -1,0 +1,45 @@
+<% #INITIALIZE
+parameter "heating_source", :default=>"GSHP", :fullname=>"Heating Source", :description=>"Central heating source equipment", :type=>"Enumeration", :valuelist=>"GSHP"
+parameter "cooling_source", :default=>"GSHP", :fullname=>"Cooling Source", :description=>"Central cooling source equipment", :type=>"Enumeration", :valuelist=>"GSHP"
+%>
+
+<%
+hw_connections = []
+cw_connections = []
+gshp_hr_connections = []
+doas_zone_names = []
+
+zones = [['Core_ZN', 'DOAS 1'], ['Perimeter_ZN_1', 'DOAS 1'], ['Perimeter_ZN_2', 'DOAS 1'], ['Perimeter_ZN_3', 'DOAS 1'], ['Perimeter_ZN_4', 'DOAS 1']]
+
+for zone in zones
+  zone_name = zone[0]
+  zone_sys = zone[1] # air system serving each zone
+  if zone_sys == 'DOAS 1'
+    doas_zone_names << zone_name
+    insert "zonehvac/doas-radiant.imf", :zone_name=>zone_name
+end
+
+insert 'system/doas.imf',
+  :system_name=>'DOAS 1',
+  :zone_names=>doas_zone_names
+
+hw_connections << 'DOAS 1'
+cw_connections << 'DOAS 1'
+
+insert 'system/hotwater.imf',
+  :system_name=>"GSHP HW", # name of system serving central hot water coil(s)
+  :heating_source=>heating_source,
+  :zone_names=>hw_connections # array of demand side systems or zones to create hot water coils for
+
+gshp_hr_connections << "GSHP HW" # array of demand side heating or cooling coils connected to heat rejection ground loop
+
+insert 'system/chilledwater.imf',
+  :system_name=>"GSHP CW", # name of system serving central chilled water coil(s)
+  :cooling_source=>cooling_source,
+  :zone_names=>cw_connections # array of demand side systems or zones to create chilled water coils for
+
+gshp_hr_connections << "GSHP CW" # array of demand side heating or cooling coils connected to heat rejection ground loop
+
+insert 'system/groundloophx.imf',
+  :system_name=>"GSHP 1", # name of heat rejection ground loop
+  :zone_names=>gshp_hr_connections # array of demand side heating or cooling coils connected to heat rejection ground loop
