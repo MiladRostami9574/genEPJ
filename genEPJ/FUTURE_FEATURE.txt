@@ -1,2 +1,0 @@
-See ../FUTURE_FEATURES.txt for a concise roadmap of future development
-items.
