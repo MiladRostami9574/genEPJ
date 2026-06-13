@@ -1,0 +1,40 @@
+<%#INITIALIZE
+parameter "ext_lights_name"
+parameter "power"
+
+parameter "control_type", :default=>"ASTRONOMICAL-CLOCK" # (ASTRONOMICAL-CLOCK | SCHEDULE)
+parameter "enduse_subcategory", :default=>"Exterior Lights"
+parameter "schedule", :default=>
+"
+  Through: 12/31,
+  For: AllDays,
+  Until: 06:00, 0,
+  Until: 23:00, 1,
+  Until: 24:00, 0;
+"
+%>
+
+<%
+if (control_type == "ASTRONOMICAL-CLOCK")
+  control_option = "AstronomicalClock"
+elsif (control_type == "SCHEDULE")
+  control_option = "ScheduleNameOnly"
+end
+%>
+
+<%#
+The AstronomicalClock option only overrides the schedule to turn lights off,
+it does not turn them on. 
+%>
+
+Exterior:Lights,
+  <%= ext_lights_name %>,             !- Name
+  <%= ext_lights_name %> Schedule,    !- Schedule Name
+  <%= power %>,     !- Design Level {W}
+  <%= control_option %>,   !- Control Option
+  <%= enduse_subcategory %>;             !- End-Use Subcategory
+
+Schedule:Compact,
+  <%= ext_lights_name %> Schedule,    !- Name
+  Fraction,                !- Schedule Type Limits Name
+<%= schedule %>     !- Schedule

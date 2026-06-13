@@ -1,0 +1,38 @@
+<%#INITIALIZE
+parameter "name"
+parameter "ext_equipment_w"
+
+parameter "fuel_use_type", :default=>'Electricity'
+parameter "schedule_ext_equipment", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 04:00,0.05,       !- Field 3
+  Until: 05:00,0.10,       !- Field 5
+  Until: 06:00,0.20,       !- Field 7
+  Until: 07:00,0.40,       !- Field 9
+  Until: 09:00,0.50,       !- Field 11
+  Until: 10:00,0.35,       !- Field 13
+  Until: 16:00,0.15,       !- Field 15
+  Until: 17:00,0.35,       !- Field 17
+  Until: 19:00,0.50,       !- Field 19
+  Until: 21:00,0.40,       !- Field 21
+  Until: 22:00,0.30,       !- Field 23
+  Until: 23:00,0.20,       !- Field 25
+  Until: 24:00,0.10;       !- Field 27
+"
+
+%>
+
+
+Exterior:FuelEquipment,
+  <%= name %>,               !- Name
+  <%= fuel_use_type %>,             !- Fuel Use Type
+  <%= name %> Schedule,          !- Schedule Name
+  <%= ext_equipment_w %>,        !- Design Level {W}
+  <%= name %>;               !- End-Use Subcategory
+
+Schedule:Compact,
+  <%= name %> Schedule,    !- Name
+  Fraction,                !- Schedule Type Limits Name
+<%= schedule_ext_equipment %> !- Schedule

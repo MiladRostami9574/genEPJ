@@ -1,0 +1,14 @@
+<%#INITIALIZE
+parameter "zone_name"
+parameter "zone_area"
+
+parameter "internal_mass_area_ratio", :default=>2.0
+%>
+
+<% internal_mass_area = zone_area * internal_mass_area_ratio %>
+
+InternalMass,
+  <%= zone_name %> Internal Mass,    !- Name
+  Interior Furnishings,     !- Construction Name
+  <%= zone_name %>,                  !- Zone Name
+  <%= internal_mass_area %>;                !- Surface Area {m2}
