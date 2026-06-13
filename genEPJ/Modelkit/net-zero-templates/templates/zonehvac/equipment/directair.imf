@@ -1,0 +1,46 @@
+<%#INITIALIZE
+parameter "zone_name"
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+
+# NOTE: Air system must be connected to a return plenum or there will be errors.
+parameter "upstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts upstream of the terminal unit
+parameter "downstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts downstream of the terminal unit
+%>
+
+  ZoneHVAC:AirDistributionUnit,
+    <%= zone_name %> Air Distribution Unit,  !- Name
+    <%= zone_name %> ATU Outlet Node,  !- Air Distribution Unit Outlet Node Name
+    AirTerminal:SingleDuct:VAV:NoReheat,  !- Air Terminal Object Type
+    <%= zone_name %> ATU,    !- Air Terminal Name
+    <%= upstream_duct_leakage %>,  !- Nominal Upstream Leakage Fraction
+    <%= downstream_duct_leakage %>;  !- Constant Downstream Leakage Fraction
+
+  AirTerminal:SingleDuct:VAV:NoReheat,
+    <%= zone_name %> ATU,    !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= zone_name %> ATU Outlet Node,  !- Air Outlet Node Name
+    <%= zone_name %> ATU Inlet Node,  !- Air Inlet Node Name
+    Autosize,                !- Maximum Air Flow Rate {m3/s}
+    Constant,                !- Zone Minimum Air Flow Input Method
+    1.0,                     !- Constant Minimum Air Flow Fraction
+    ,                        !- Fixed Minimum Air Flow Rate {m3/s}
+    ;                        !- Minimum Air Flow Fraction Schedule Name
+
+<% if (exhaust_fan) %>
+<%# NOTE: Fan:ZoneExhaust appears to be forced on with night cycling which in turn forces on outdoor air.
+Does not seem possible to do night cycle with exhaust fans without also getting outdoor air during unoccupied hours. %>
+  Fan:ZoneExhaust,
+    <%= zone_name %> Exhaust Fan,  !- Name
+    <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+    <%= exhaust_fan_eff %>,  !- Fan Efficiency
+    <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+    <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+    <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+    <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+    Zone Exhaust Fans;       !- End-Use Subcategory
+<% end %>
+

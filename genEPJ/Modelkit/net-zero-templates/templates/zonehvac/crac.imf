@@ -1,0 +1,574 @@
+<%#INITIALIZE
+# CRAC = Computer Room Air Conditioner (used with datacenters)
+# no heating elements
+parameter "zone_name"
+
+# from Hong 2008
+parameter "cooling_setpoint", :default=>76|'F'
+
+parameter "oa_method", :default=>"Sum"
+parameter "oa_person", :default=>0|'CFM'
+parameter "oa_area", :default=>0|'CFM/ft2'
+parameter "oa_zone", :default=>0|'CFM'
+
+# from Hong 2008
+parameter "fan_eff", :default=>0.54
+parameter "fan_rise", :default=>2.52|'in H2O'
+parameter "fan_motor_eff", :default=>0.80
+parameter "cooling_coil_type", :default=>"DX"    # (DX | CHILLEDWATER)
+parameter "cooling_coil_cop", :default=>2.82     # DX only
+
+parameter "exhaust_fan", :default=>false
+parameter "exhaust_fan_eff", :default=>0.25
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O'
+parameter "exhaust_fan_flow", :default=>0.0|'CFM'
+
+parameter "operation_schedule", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+
+parameter "clear_water_storage_tank", :default=>"" # variable used to create tank to store clear water as cooling coil condensate
+
+# apparently in Hong (2008), they used DifferentialEnthalply -- the specific
+# language in the report is "dual enthalpy type (by comparing the enthalpy of
+# the outside air witht he enthalpy of the return air)
+parameter "economizer_type", :default=>"NoEconomizer" # NoEconomizer | FixedDryBulb | DifferentialDryBulb | FixedEnthalpy | DifferentialEnthalpy | ElectronicEnthalpy | FixedDewPointAndDryBulb | DifferentialDryBulbAndEnthalpy
+parameter "oa_econ_high_limit", :default=>75|'F'   # Maximum outdoor air temperature for economizer operation (depends on climate zone for ASHRAE 90.1)
+
+# References:
+# Hong, et al. (2008). "Comparisons of HVAC Simulations between EnergyPlus and
+# DOE-2.2 for Data Centers".
+%>
+
+<%
+controllers = []
+if (cooling_coil_type == 'CHILLEDWATER')
+  controllers << zone_name + ' Cooling Coil Controller'
+end
+%>
+
+Sizing:Zone,
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  SupplyAirTemperature,    !- Zone Cooling Design Supply Air Temperature Input Method
+  14,                      !- Zone Cooling Design Supply Air Temperature {C}
+  ,                        !- Zone Cooling Design Supply Air Temperature Difference {deltaC}
+  SupplyAirTemperature,    !- Zone Heating Design Supply Air Temperature Input Method
+  40,                      !- Zone Heating Design Supply Air Temperature {C}
+  ,                        !- Zone Heating Design Supply Air Temperature Difference {deltaC}
+  0.0085,                  !- Zone Cooling Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  0.0080,                  !- Zone Heating Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  <%= zone_name %> Design OA,  !- Design Specification Outdoor Air Object Name
+  ,                        !- Zone Heating Sizing Factor
+  ,                        !- Zone Cooling Sizing Factor
+  DesignDay,               !- Cooling Design Air Flow Method
+  ,                        !- Cooling Design Air Flow Rate {m3/s}
+  ,                        !- Cooling Minimum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Cooling Minimum Air Flow {m3/s}
+  0.0,                     !- Cooling Minimum Air Flow Fraction
+  DesignDay,               !- Heating Design Air Flow Method
+  0.0,                     !- Heating Design Air Flow Rate {m3/s}
+  ,                        !- Heating Maximum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Heating Maximum Air Flow {m3/s}
+  ;                        !- Heating Maximum Air Flow Fraction
+
+DesignSpecification:OutdoorAir,
+  <%= zone_name %> Design OA,  !- Name
+  <%= oa_method %>,        !- Outdoor Air Method
+  <%= oa_person %>,        !- Outdoor Air Flow per Person {m3/s-person}
+  <%= oa_area %>,          !- Outdoor Air Flow per Zone Floor Area {m3/s-m2}
+  <%= oa_zone %>;          !- Outdoor Air Flow per Zone {m3/s}
+
+ZoneControl:Thermostat,
+  <%= zone_name %> Thermostat,  !- Name
+  <%= zone_name %>,  !- Zone or ZoneList Name
+  <%= zone_name %> Thermostat Type Sched,  !- Control Type Schedule Name
+  ThermostatSetpoint:SingleCooling,  !- Control 1 Object Type
+  <%= zone_name %> Cooling Setpoint;  !- Control 1 Name
+
+Schedule:Constant,
+  <%= zone_name %> Thermostat Type Sched,  !- Name
+  Control Type,            !- Schedule Type Limits Name
+  2;                       !- Hourly Value
+
+ThermostatSetpoint:SingleCooling,
+  <%= zone_name %> Cooling Setpoint,  !- Name
+  <%= zone_name %> Cooling Setpoint Sch;  !- Cooling Setpoint Temperature Schedule Name
+
+Schedule:Constant,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= cooling_setpoint %>;  !- Hourly Value
+
+Schedule:Compact,
+  <%= zone_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+ZoneHVAC:EquipmentConnections,
+  <%= zone_name %>,        !- Zone Name
+  <%= zone_name %> Equipment,  !- Zone Conditioning Equipment List Name
+  <%= zone_name %> Inlet Nodes,  !- Zone Air Inlet Node or NodeList Name
+<% if (exhaust_fan) %>
+  <%= zone_name %> Exhaust Nodes,  !- Zone Air Exhaust Node or NodeList Name
+<% else %>
+  ,                        !- Zone Air Exhaust Node or NodeList Name
+<% end %>
+  <%= zone_name %> Air Node,  !- Zone Air Node Name
+  <%= zone_name %> Return Air Node;  !- Zone Return Air Node Name
+
+NodeList,
+  <%= zone_name %> Inlet Nodes,  !- Name
+  <%= zone_name %> Direct Air Outlet Node;  !- Node 1 Name
+
+<% if (exhaust_fan) %>
+NodeList,
+  <%= zone_name %> Exhaust Nodes,    !- Name
+  <%= zone_name %> Exhaust Fan Inlet Node;  !- Node 1 Name
+<% end %>
+
+<% if (exhaust_fan) %>
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  ZoneHVAC:AirDistributionUnit,  !- Zone Equipment 1 Object Type
+  <%= zone_name %> Air Distribution Unit,  !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Sequence
+  1,                       !- Zone Equipment 1 Heating or No-Load Sequence
+  Fan:ZoneExhaust,         !- Zone Equipment 2 Object Type
+  <%= zone_name %> Exhaust Fan,  !- Zone Equipment 2 Name
+  2,                       !- Zone Equipment 2 Cooling Sequence
+  2;                       !- Zone Equipment 2 Heating or No-Load Sequence
+<% else %>
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  ZoneHVAC:AirDistributionUnit,  !- Zone Equipment 1 Object Type
+  <%= zone_name %> Air Distribution Unit,  !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Sequence
+  1;                       !- Zone Equipment 1 Heating or No-Load Sequence
+<% end %>
+
+ZoneHVAC:AirDistributionUnit,
+  <%= zone_name %> Air Distribution Unit,  !- Name
+  <%= zone_name %> Direct Air Outlet Node,  !- Air Distribution Unit Outlet Node Name
+  AirTerminal:SingleDuct:ConstantVolume:NoReheat,  !- Air Terminal Object Type
+  <%= zone_name %> Direct Air;    !- Air Terminal Name
+
+AirTerminal:SingleDuct:ConstantVolume:NoReheat,
+  <%= zone_name %> Direct Air,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= zone_name %> Direct Air Inlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> Direct Air Outlet Node,  !- Air Outlet Node Name
+  Autosize;                !- Maximum Air Flow Rate {m3/s}
+
+<%# Does this actually do anything?  It's an uncontrolled duct?
+    mok: one thing it does is define the "CRAC Supply Equipment Outlet Node"
+    which is used by the subsequent SetpointManager:MixedAir "<> CRAC CoolC SAT Manager"
+%>
+SetpointManager:SingleZone:Reheat,
+  <%= zone_name %> SupAirTemp Manager,   !- Name
+  Temperature,             !- Control Variable
+  10.0,                    !- Minimum Supply Air Temperature {C}
+  50.0,                    !- Maximum Supply Air Temperature {C}
+  <%= zone_name %>,        !- Control Zone Name
+  <%= zone_name %> Air Node,  !- Zone Node Name
+  <%= zone_name %> Direct Air Outlet Node,  !- Zone Inlet Node Name
+  <%= zone_name %> CRAC Supply Equipment Outlet Node;  !- Setpoint Node or NodeList Name
+
+<% if (exhaust_fan) %>
+Fan:ZoneExhaust,
+  <%= zone_name %> Exhaust Fan,  !- Name
+  <%= zone_name %> Exhaust Fan Schedule,  !- Availability Schedule Name
+  <%= exhaust_fan_eff %>,  !- Fan Efficiency
+  <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+  <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+  <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+  Zone Exhaust Fans;       !- End-Use Subcategory
+
+Schedule:Compact,
+  <%= zone_name %> Exhaust Fan Schedule,  !- Name
+  On/Off, !- Schedule Type Limits Name
+  Through: 12/31, !- Field 1
+  For: Weekdays SummerDesignDay, !- Field 2
+  Until: 05:00, !- Field 3
+  0.0, !- Field 4
+  Until: 18:00, !- Field 5
+  1.0, !- Field 6
+  Until: 24:00, !- Field 7
+  0.0, !- Field 8
+  For: WinterDesignDay, !- Field 9
+  Until: 05:00, !- Field 10
+  0.0, !- Field 11
+  Until: 18:00, !- Field 12
+  1.0, !- Field 13
+  Until: 24:00, !- Field 14
+  0.0, !- Field 15
+  For: Saturday Sunday Holidays AllOtherDays, !- Field 16
+  Until: 24:00, !- Field 17
+  0.0; !- Field 18
+<% end %>
+
+AirLoopHVAC,
+  <%= zone_name %> CRAC,    !- Name
+<% if (controllers.length > 0) %>
+  <%= zone_name %> Controllers,  !- Controller List Name
+<% else %>
+  ,  !- Controller List Name
+<% end %>
+  <%= zone_name %> CRAC Availability Manager List,  !- Availability Manager List Name
+  Autosize,                !- Design Supply Air Flow Rate {m3/s}
+  <%= zone_name %> CRAC Air Loop Branches,  !- Branch List Name
+  ,                        !- Connector List Name
+  <%= zone_name %> CRAC Supply Equipment Inlet Node,  !- Supply Side Inlet Node Name
+  <%= zone_name %> CRAC Zone Equipment Outlet Node,  !- Demand Side Outlet Node Name
+  <%= zone_name %> CRAC Zone Equipment Inlet Node,  !- Demand Side Inlet Node Names
+  <%= zone_name %> CRAC Supply Equipment Outlet Node;  !- Supply Side Outlet Node Names
+
+<%# NOTE:  AirLoopHVAC:ControllerList needs at least one controller %>
+<% if (controllers.length > 0) %>
+AirLoopHVAC:ControllerList,
+  <%= zone_name %> Controllers,  !- Name
+<% for controller in controllers[0..-2] %>
+  Controller:WaterCoil,    !- Controller Object Type
+  <%= controller %>,  !- Controller Name
+<% end %>
+  Controller:WaterCoil,    !- Controller Object Type
+  <%= controllers[-1] %>;  !- Controller Name
+<% end %>
+
+SetpointManager:MixedAir,
+  <%= zone_name %> CRAC CoolC SAT Manager,  !- Name
+  Temperature,             !- Control Variable
+  <%= zone_name %> CRAC Supply Equipment Outlet Node,  !- Reference Setpoint Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Fan Inlet Node Name
+  <%= zone_name %> CRAC Supply Equipment Outlet Node,  !- Fan Outlet Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node;  !- Setpoint Node or NodeList Name
+
+Sizing:System,
+  <%= zone_name %> CRAC,    !- AirLoop Name
+  Sensible,                !- Type of Load to Size On
+  Autosize,                !- Design Outdoor Air Flow Rate {m3/s}
+  1.0,                     !- Central Heating Maximum System Air Flow Ratio
+  7.0,                     !- Preheat Design Temperature {C}
+  0.008,                   !- Preheat Design Humidity Ratio {kg-H2O/kg-Air}
+  12.8000,                 !- Precool Design Temperature {C}
+  0.008,                   !- Precool Design Humidity Ratio {kg-H2O/kg-Air}
+  12.8000,                 !- Central Cooling Design Supply Air Temperature {C}
+  40.0,                    !- Central Heating Design Supply Air Temperature {C}
+  NonCoincident,              !- Type of Zone Sum to Use
+  No,                      !- 100% Outdoor Air in Cooling
+  No,                      !- 100% Outdoor Air in Heating
+  0.0085,                  !- Central Cooling Design Supply Air Humidity Ratio {kg-H2O/kg-Air}
+  0.0080,                  !- Central Heating Design Supply Air Humidity Ratio {kg-H2O/kg-Air}
+  DesignDay,               !- Cooling Supply Air Flow Rate Method
+  0.0,                        !- Cooling Supply Air Flow Rate {m3/s}
+  ,                        !- Cooling Supply Air Flow Rate Per Floor Area {m3/s-m2}
+  ,                        !- Cooling Fraction of Autosized Cooling Supply Air Flow Rate
+  ,                        !- Cooling Supply Air Flow Rate Per Unit Cooling Capacity {m3/s-W}
+  DesignDay,               !- Heating Supply Air Flow Rate Method
+  0.0,                        !- Heating Supply Air Flow Rate {m3/s}
+  ,                        !- Heating Supply Air Flow Rate Per Floor Area {m3/s-m2}
+  ,                        !- Heating Fraction of Autosized Heating Supply Air Flow Rate
+  ,                        !- Heating Fraction of Autosized Cooling Supply Air Flow Rate
+  ,                        !- Heating Supply Air Flow Rate Per Unit Heating Capacity {m3/s-W}
+  ,                        !- System Outdoor Air Method
+  1.0,                     !- Zone Maximum Outdoor Air Fraction {dimensionless}
+  CoolingDesignCapacity,   !- Cooling Design Capacity Method
+  Autosize,                !- Cooling Design Capacity {W}
+  ,                        !- Cooling Design Capacity Per Floor Area {W/m2}
+  ,                        !- Fraction of Autosized Cooling Design Capacity
+  HeatingDesignCapacity,   !- Heating Design Capacity Method
+  Autosize,                !- Heating Design Capacity {W}
+  ,                        !- Heating Design Capacity Per Floor Area {W/m2}
+  ,                        !- Fraction of Autosized Heating Design Capacity
+  VT;                      !- Central Cooling Capacity Control Method
+
+AvailabilityManagerAssignmentList,
+  <%= zone_name %> CRAC Availability Manager List,  !- Name
+  AvailabilityManager:NightCycle,  !- Availability Manager 1 Object Type
+  <%= zone_name %> CRAC Availability Manager;  !- Availability Manager 1 Name
+
+AvailabilityManager:NightCycle,
+  <%= zone_name %> CRAC Availability Manager,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Applicability Schedule Name
+  <%= zone_name %> Operation Schedule,  !- Fan Schedule Name
+  CycleOnAny,              !- Control Type
+  1.0,                     !- Thermostat Tolerance {deltaC}
+  FixedRunTime,            !- Cycling Run Time Control Type
+  1800;                    !- Cycling Run Time {s}
+
+BranchList,
+  <%= zone_name %> CRAC Air Loop Branches,  !- Name
+  <%= zone_name %> CRAC Air Loop Main Branch;  !- Branch 1 Name
+
+Branch,
+  <%= zone_name %> CRAC Air Loop Main Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  AirLoopHVAC:OutdoorAirSystem,  !- Component 1 Object Type
+  <%= zone_name %> CRAC OA,  !- Component 1 Name
+  <%= zone_name %> CRAC Supply Equipment Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> CRAC Mixed Air Node,  !- Component 1 Outlet Node Name
+<% if (cooling_coil_type == "DX") %>
+  CoilSystem:Cooling:DX,  !- Component 2 Object Type
+<% elsif (cooling_coil_type == "CHILLEDWATER") %>
+  Coil:Cooling:Water,      !- Component 2 Object Type
+<% end %>
+  <%= zone_name %> CRAC CoolC,  !- Component 2 Name
+  <%= zone_name %> CRAC Mixed Air Node,  !- Component 2 Inlet Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Component 2 Outlet Node Name
+  Fan:ConstantVolume,      !- Component 3 Object Type
+  <%= zone_name %> CRAC Fan,        !- Component 3 Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Component 3 Inlet Node Name
+  <%= zone_name %> CRAC Supply Equipment Outlet Node;  !- Component 3 Outlet Node Name
+
+AirLoopHVAC:OutdoorAirSystem,
+  <%= zone_name %> CRAC OA,  !- Name
+  <%= zone_name %> CRAC OA_Controllers,  !- Controller List Name
+  <%= zone_name %> CRAC OA_Equipment,  !- Outdoor Air Equipment List Name
+  <%= zone_name %> CRAC Availability Manager List;  !- Availability Manager List Name
+
+AirLoopHVAC:ControllerList,
+  <%= zone_name %> CRAC OA_Controllers,  !- Name
+  Controller:OutdoorAir,   !- Controller 1 Object Type
+  <%= zone_name %> CRAC OA_Controller;  !- Controller 1 Name
+
+AirLoopHVAC:OutdoorAirSystem:EquipmentList,
+  <%= zone_name %> CRAC OA_Equipment,  !- Name
+  OutdoorAir:Mixer,        !- Component 1 Object Type
+  <%= zone_name %> CRAC OAMixing Box;  !- Component 1 Name
+
+OutdoorAir:NodeList,
+  <%= zone_name %> CRAC OAInlet Node;  !- Node or NodeList Name 1
+
+OutdoorAir:Mixer,
+  <%= zone_name %> CRAC OAMixing Box,  !- Name
+  <%= zone_name %> CRAC Mixed Air Node,  !- Mixed Air Node Name
+  <%= zone_name %> CRAC OAInlet Node,  !- Outdoor Air Stream Node Name
+  <%= zone_name %> CRAC OARelief Node,  !- Relief Air Stream Node Name
+  <%= zone_name %> CRAC Supply Equipment Inlet Node;  !- Return Air Stream Node Name
+
+SetpointManager:MixedAir,
+  <%= zone_name %> CRAC OAMixed Air Temp Manager,  !- Name
+  Temperature,             !- Control Variable
+  <%= zone_name %> CRAC Supply Equipment Outlet Node,  !- Reference Setpoint Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Fan Inlet Node Name
+  <%= zone_name %> CRAC Supply Equipment Outlet Node,  !- Fan Outlet Node Name
+  <%= zone_name %> CRAC Mixed Air Node;  !- Setpoint Node or NodeList Name
+
+Controller:OutdoorAir,
+  <%= zone_name %> CRAC OA_Controller,  !- Name
+  <%= zone_name %> CRAC OARelief Node,  !- Relief Air Outlet Node Name
+  <%= zone_name %> CRAC Supply Equipment Inlet Node,  !- Return Air Node Name
+  <%= zone_name %> CRAC Mixed Air Node,  !- Mixed Air Node Name
+  <%= zone_name %> CRAC OAInlet Node,  !- Actuator Node Name
+  Autosize,                !- Minimum Outdoor Air Flow Rate {m3/s}
+  Autosize,                !- Maximum Outdoor Air Flow Rate {m3/s}
+  <%= economizer_type %>,            !- Economizer Control Type
+  ModulateFlow,            !- Economizer Control Action Type
+  <%= oa_econ_high_limit %>,  !28.0,    !- Economizer Maximum Limit Dry-Bulb Temperature {C}
+  64000.0,                 !- Economizer Maximum Limit Enthalpy {J/kg}
+  ,                        !- Economizer Maximum Limit Dewpoint Temperature {C}
+  ,                        !- Electronic Enthalpy Limit Curve Name
+  -100.0,                  !- Economizer Minimum Limit Dry-Bulb Temperature {C}
+  NoLockout,               !- Lockout Type
+  FixedMinimum,            !- Minimum Limit Type
+  <%= zone_name %> MinOA_Sched,  !- Minimum Outdoor Air Schedule Name
+  ,                        !- Minimum Fraction of Outdoor Air Schedule Name
+  ,                        !- Maximum Fraction of Outdoor Air Schedule Name
+  ,                        !- Mechanical Ventilation Controller Name
+  No,                      !- Time of Day Economizer Control Schedule Name
+  ,                        !- High Humidity Control
+  ,                        !- Humidistat Control Zone Name
+  ,                        !- High Humidity Outdoor Air Flow Ratio
+  ,                        !- Control High Indoor Humidity Based on Outdoor Humidity Ratio
+  BypassWhenOAFlowGreaterThanMinimum;  !- Heat Recovery Bypass Control Type
+
+Schedule:Compact,
+  <%= zone_name %> MinOA_Sched,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 4
+
+<% if (cooling_coil_type == "DX") %>
+
+<%# Probably want to switch to :TwoSpeed coil. %>
+
+CoilSystem:Cooling:DX,
+  <%= zone_name %> CRAC CoolC,    !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= zone_name %> CRAC Mixed Air Node,  !- DX Cooling Coil System Inlet Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- DX Cooling Coil System Outlet Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- DX Cooling Coil System Sensor Node Name
+  Coil:Cooling:DX:SingleSpeed,  !- Cooling Coil Object Type
+  <%= zone_name %> CRAC DXCoil;  !- Cooling Coil Name
+
+Coil:Cooling:DX:SingleSpeed,
+  <%= zone_name %> CRAC DXCoil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Autosize,                !- Rated Total Cooling Capacity {W}
+  Autosize,                !- Rated Sensible Heat Ratio
+  <%= cooling_coil_cop %>,  !- Rated COP
+  Autosize,                !- Rated Air Flow Rate {m3/s}
+  773.3,                   !- Rated Evaporator Fan Power Per Volume Flow Rate {W/(m3/s)}
+  <%= zone_name %> CRAC Mixed Air Node,  !- Air Inlet Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Air Outlet Node Name
+  <%= zone_name %> CRAC ClgCapFuncTempCurve,  !- Total Cooling Capacity Function of Temperature Curve Name
+  <%= zone_name %> CRAC ClgCapFuncFlowFracCurve,  !- Total Cooling Capacity Function of Flow Fraction Curve Name
+  <%= zone_name %> CRAC ClgEirFuncTempCurve,  !- Energy Input Ratio Function of Temperature Curve Name
+  <%= zone_name %> CRAC ClgEirFuncFlowFracCurve,  !- Energy Input Ratio Function of Flow Fraction Curve Name
+  <%= zone_name %> CRAC ClgPlrCurve,  !- Part Load Fraction Correlation Curve Name
+  -25.0,                     !- Minimum Outdoor Dry-Bulb Temperature for Compressor Operation (C)
+  1000.0,                  !- Nominal Time for Condensate Removal to Begin {s}
+  1.5,                     !- Ratio of Initial Moisture Evaporation Rate and Steady State Latent Capacity {dimensionless}
+  3.0,                     !- Maximum Cycling Rate {cycles/hr}
+  45.0,                    !- Latent Capacity Time Constant {s}
+  <%= zone_name %> CRAC CondAirInletNode,  !- Condenser Air Inlet Node Name
+  AirCooled,               !- Condenser Type
+  0.9,                     !- Evaporative Condenser Effectiveness {dimensionless}
+  ,                        !- Evaporative Condenser Air Flow Rate {m3/s}
+  ,                        !- Evaporative Condenser Pump Rated Power Consumption {W}
+  ,                        !- Crankcase Heater Capacity {W}
+  10,                      !- Maximum Outdoor Dry-Bulb Temperature for Crankcase Heater Operation {C}
+  ,                        !- Supply Water Storage Tank Name
+  <%= clear_water_storage_tank %>;                        !- Condensate Collection Water Storage Tank Name
+
+OutdoorAir:Node,
+  <%= zone_name %> CRAC CondAirInletNode;  !- Name
+
+Curve:Biquadratic,
+  <%= zone_name %> CRAC ClgCapFuncTempCurve,  !- Name
+  0.42415,                 !- Coefficient1 Constant
+  0.04426,                 !- Coefficient2 x
+  -0.00042,                !- Coefficient3 x**2
+  0.00333,                 !- Coefficient4 y
+  -0.00008,                !- Coefficient5 y**2
+  -0.00021,                !- Coefficient6 x*y
+  17.00000,                !- Minimum Value of x
+  22.00000,                !- Maximum Value of x
+  13.00000,                !- Minimum Value of y
+  46.00000;                !- Maximum Value of y
+
+Curve:Quadratic,
+  <%= zone_name %> CRAC ClgCapFuncFlowFracCurve,  !- Name
+  0.77136,                 !- Coefficient1 Constant
+  0.34053,                 !- Coefficient2 x
+  -0.11088,                !- Coefficient3 x**2
+  0.75918,                 !- Minimum Value of x
+  1.13877;                 !- Maximum Value of x
+
+Curve:Biquadratic,
+  <%= zone_name %> CRAC ClgEirFuncTempCurve,  !- Name
+  1.23649,                 !- Coefficient1 Constant
+  -0.02431,                !- Coefficient2 x
+  0.00057,                 !- Coefficient3 x**2
+  -0.01434,                !- Coefficient4 y
+  0.00063,                 !- Coefficient5 y**2
+  -0.00038,                !- Coefficient6 x*y
+  17.00000,                !- Minimum Value of x
+  22.00000,                !- Maximum Value of x
+  13.00000,                !- Minimum Value of y
+  46.00000;                !- Maximum Value of y
+
+Curve:Quadratic,
+  <%= zone_name %> CRAC ClgEirFuncFlowFracCurve,  !- Name
+  1.20550,                 !- Coefficient1 Constant
+  -0.32953,                !- Coefficient2 x
+  0.12308,                 !- Coefficient3 x**2
+  0.75918,                 !- Minimum Value of x
+  1.13877;                 !- Maximum Value of x
+
+Curve:Quadratic,
+  <%= zone_name %> CRAC ClgPlrCurve,         !- Name
+  0.77100,                 !- Coefficient1 Constant
+  0.22900,                 !- Coefficient2 x
+  0.0,                     !- Coefficient3 x**2
+  0.0,                     !- Minimum Value of x
+  1.0;                     !- Maximum Value of x
+
+<% elsif (cooling_coil_type == "CHILLEDWATER") %>
+<%#
+WARNING!  There are some serious sizing problems with Coil:Cooling:Water.
+To get it to meet setpoint, MUST hard size inlet and outlet air conditions.
+Inlet air conditions must be very extreme to get sufficient sizing (especially temperature).
+At a certain threshold for inlet air conditions, the coil is sized or oversized enough to meet setpoint.
+Beyond this point, energy performance is not very sensitive to the inlet air design conditions.
+(Oversizing does not affect energy significantly.)
+
+Autosizing results sometimes come out differently depending if doing design day or annual simulation!
+%>
+Coil:Cooling:Water,
+  <%= zone_name %> CRAC CoolC,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Autosize,                !- Design Water Flow Rate {m3/s}
+  Autosize,                !- Design Air Flow Rate {m3/s}
+  Autosize,                !- Design Inlet Water Temperature {C}
+  50,                      !- Design Inlet Air Temperature {C}
+  14.0000,  !- Design Outlet Air Temperature {C}
+  0.025,                   !- Design Inlet Air Humidity Ratio {kg-H2O/kg-air}
+  0.008,                   !- Design Outlet Air Humidity Ratio {kg-H2O/kg-air}
+  <%= zone_name %> CoolC Inlet Node,  !- Water Inlet Node Name
+  <%= zone_name %> CoolC Outlet Node,  !- Water Outlet Node Name
+  <%= zone_name %> CRAC Mixed Air Node,  !- Air Inlet Node Name
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Air Outlet Node Name
+  SimpleAnalysis,          !- Type of Analysis
+  CrossFlow,               !- Heat Exchanger Configuration
+  <%= clear_water_storage_tank %>;                        !- Condensate Collection Water Storage Tank Name
+
+Controller:WaterCoil,
+  <%= zone_name %> Cooling Coil Controller,  !- Name
+  Temperature,             !- Control Variable
+  Reverse,                 !- Action
+  Flow,                    !- Actuator Variable
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Sensor Node Name
+  <%= zone_name %> CoolC Inlet Node,  !- Actuator Node Name
+  0.0001,                  !- Controller Convergence Tolerance {deltaC}
+  Autosize,                !- Maximum Actuated Flow {m3/s}
+  0.0;                     !- Minimum Actuated Flow {m3/s}
+
+Branch,
+  <%= zone_name %> CW Demand Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Coil:Cooling:Water,      !- Component 1 Object Type
+  <%= zone_name %> CRAC CoolC,  !- Component 1 Name
+  <%= zone_name %> CoolC Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> CoolC Outlet Node;  !- Component 1 Outlet Node Name
+<% end %>
+
+Fan:ConstantVolume,
+  <%= zone_name %> CRAC Fan,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= fan_eff %>,  !- Fan Efficiency
+  <%= fan_rise %>,  !- Pressure Rise {Pa}
+  Autosize,                !- Maximum Flow Rate {m3/s}
+  <%= fan_motor_eff %>,    !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  <%= zone_name %> CRAC CoolC Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> CRAC Supply Equipment Outlet Node,  !- Air Outlet Node Name
+  Fan Energy;              !- End-Use Subcategory
+
+AirLoopHVAC:SupplyPath,
+  <%= zone_name %> CRAC Supply Air Path,  !- Name
+  <%= zone_name %> CRAC Zone Equipment Inlet Node,  !- Supply Air Path Inlet Node Name
+  AirLoopHVAC:ZoneSplitter,!- Component 1 Object Type
+  <%= zone_name %> CRAC Supply Air Splitter;  !- Component 1 Name
+
+AirLoopHVAC:ZoneSplitter,
+  <%= zone_name %> CRAC Supply Air Splitter,  !- Name
+  <%= zone_name %> CRAC Zone Equipment Inlet Node,  !- Inlet Node Name
+  <%= zone_name %> Direct Air Inlet Node;  !- Outlet 1 Node Name
+
+AirLoopHVAC:ReturnPath,
+  <%= zone_name %> CRAC Return Air Path,  !- Name
+  <%= zone_name %> CRAC Zone Equipment Outlet Node,  !- Return Air Path Outlet Node Name
+  AirLoopHVAC:ZoneMixer,   !- Component 1 Object Type
+  <%= zone_name %> CRAC Return Air Mixer;  !- Component 1 Name
+
+AirLoopHVAC:ZoneMixer,
+  <%= zone_name %> CRAC Return Air Mixer,  !- Name
+  <%= zone_name %> CRAC Zone Equipment Outlet Node,  !- Outlet Node Name
+  <%= zone_name %> Return Air Node;  !- Inlet 1 Node Name

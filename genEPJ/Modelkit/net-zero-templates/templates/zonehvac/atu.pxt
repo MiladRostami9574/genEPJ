@@ -1,0 +1,605 @@
+<%#INITIALIZE
+parameter "zone_name" # name of Zone object in model
+parameter "system_name", :default=>nil # name of Air Loop System that air terminals are connected to
+
+parameter "terminal_type", :default=>"CAV" # (CAV | CAV-CHILLED-BEAM | CAV-INDUCTION | CAV-DUAL-DUCT | VAV | VAV-PARALLEL-FPB | VAV-SERIES-FPB | VAV-DUAL-DUCT) Type of air terminals to create
+
+parameter "design_heating_sat", :default=>120|'F' # Design heating supply air temp leaving air terminal. Default 113 for CAV / VAV, 140F for induction coil, 86 for DOAS / chilled beam
+parameter "design_cooling_sat", :default=>45|'F' # Design cooling supply air temp leaving air terminal. Default 55 for CAV / VAV / induction coil, 53 for DOAS / chilled beam
+
+parameter "heating_setpoint", :default=>70|'F' # Setpoint temp where thermostat turns on heating.
+parameter "cooling_setpoint", :default=>75|'F' # Setpoint temp where thermostat turns on cooling.
+
+parameter "heating_setpoint_sch", :default=>nil # Schedule to model different heating setpoint temps throughout the simulation (i.e. setback)
+parameter "cooling_setpoint_sch", :default=>nil # Schedule to model different cooling setpoint temps throughout the simulation (i.e. setback)
+
+parameter "min_humidity_setpoint", :default=>30 # {% RH} Min humidity in zones for central humidifier to uphold. Min value from ASHRAE Section 6.4.3.6
+parameter "max_humidity_setpoint", :default=>60 # {% RH} Max humidity in zones for central dehumidifier / cooling coil to uphold. Max value from ASHRAE Section 6.4.3.6
+
+parameter "min_humidity_schedule", :default=>nil # Min RH schedule where humidistat turns on humidification for zone.
+parameter "max_humidity_schedule", :default=>nil # Max RH schedule where humidistat turns on dehumidification for zone.
+
+parameter "oa_method", :default=>"Sum" # (Flow/Person | Flow/Area | Flow/Zone | AirChanges/Hour | Sum | Maximum ) Sets how E+ calculates zone OA needs
+parameter "oa_person", :default=>0|'CFM' # Defines zone OA needs per occupant
+parameter "oa_area", :default=>0|'CFM/ft2' # Defines zone OA needs per floor area
+parameter "oa_zone", :default=>0|'CFM' # Defines zone OA needs as absolute CFM
+
+parameter "vav_damper_control", :default=>"SINGLE-MAXIMUM"  # (SINGLE-MAXIMUM | DUAL-MAXIMUM) VAV terminal damper control type
+parameter "terminal_fan_eff", :default=>0.5  # Terminal fan efficiency. Default in DOAS template is 0.6
+parameter "terminal_fan_rise", :default=>0.2|'in H2O' # Terminal fan pressure rise. Default in DOAS template is 0.35 in H2O
+parameter "terminal_motor_eff", :default=>0.9 # Terminal fan motor efficiency.
+parameter "vav_fpb_min_flow_frac", :default=>"Autosize" # Fraction of minimum flow to design flow of terminal. Only used with parallel and series FPB VAV terminals.
+parameter "terminal_min_flow_frac", :default=>0.3 # Fraction of minimum flow to design flow of terminal. Used with all terminals except parallel and series FPB VAV terminals.
+
+parameter "heating_coil_type", :default=>"GAS"    # (NONE | GAS | ELECTRIC | HOTWATER) Terminal reheat coil type
+parameter "heating_coil_eff", :default=>0.8     # Terminal reheat coil efficiency. Used with GAS or ELECTRIC coil types.
+parameter "max_reheat_air_temp", :default=>90|'F' # Maximum air temp leaving air terminal reheat coil. Reference for default value: http://www.syska.com/cms/docs/articles/DistrictEnergy_tredinnick_0509.pdf
+
+parameter "exhaust_fan", :default=>false # True / false parameter that adds zone exhaust fan.
+parameter "exhaust_fan_eff", :default=>0.25 # Zone exhaust fan efficiency.
+parameter "exhaust_fan_rise", :default=>1.0|'in H2O' # Zone exhaust fan pressure rise.
+parameter "exhaust_fan_flow", :default=>100.0|'CFM' # Zone exhaust fan flow rate.
+
+parameter "induction_ratio", :default=>1.0 # Ratio of induced air flow from zones to primary supply flow from central air loop. Only used with induction terminals.
+
+# NOTE: Air system must be connected to a return plenum or there will be errors.
+# NOTE2: CooledBeam object is not compatible with the simple duct leakage model; these parameters have no effect.
+
+parameter "upstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts upstream of the terminal unit
+parameter "downstream_duct_leakage", :default=>0  # Leakage fraction to return plenum in ducts downstream of the terminal unit
+
+parameter "operation_schedule", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+parameter "clear_water_storage_tank", :default=>"" # variable used to create tank to store clear water as cooling coil condensate
+%>
+
+<%
+# Make series of warning messages in case of user input error
+
+if (terminal_type == "CAV-CHILLED-BEAM" && heating_coil_type != "NONE")
+  puts "[WARNING] Chilled beam terminals do not have reheat coils! Set reheat coil type to 'NONE' or change terminal type."
+end
+
+if ((terminal_type == "CAV-DUAL-DUCT" || terminal_type == "VAV-DUAL-DUCT") && heating_coil_type != "NONE")
+  puts "[WARNING] Dual duct terminals do not have reheat coils! Set reheat coil type to 'NONE' or change terminal type."
+end
+
+if ((terminal_type == "VAV-PARALLEL-FPB" || terminal_type == "VAV-SERIES-FPB") && heating_coil_type == "NONE")
+  puts "[WARNING] VAV fan-powered terminals MUST have reheat coils! Change reheat coil type from 'NONE' or change terminal type."
+end
+
+# Create array to store names of exhaust nodes connected to each zone
+exhaust_nodes = [] # initialize array to nil, will use to set node names used in "zone_name" Exhaust Nodes NodeList object
+
+if (terminal_type == "VAV-PARALLEL-FPB" || terminal_type == "VAV-SERIES-FPB" || terminal_type == "CAV-INDUCTION")
+  exhaust_nodes << "#{zone_name} ATU Secondary Inlet Node"
+end
+if (exhaust_fan)
+  exhaust_nodes << "#{zone_name} Exhaust Fan Inlet Node"
+end
+
+# Hard-set simple duct leakage header parameters to 0 when modeling E+ objects that don't allow simple duct leakage calcs
+
+if (terminal_type == "VAV-PARALLEL-FPB" || terminal_type == "VAV-SERIES-FPB" || terminal_type == "CAV-INDUCTION" || terminal_type == "CAV-CHILLED-BEAM" || terminal_type == "CAV-DUAL-DUCT" || terminal_type == "VAV-DUAL-DUCT")
+  upstream_duct_leakage = 0
+  downstream_duct_leakage = 0
+  puts "[WARNING] Desired terminal type DOES NOT allow simple duct leakage calculations!"
+end
+
+# Hard-set min primary air flow fraction through terminal to 1.0 for CAV single and dual duct terminals. CAV chilled beam and induction terminals don't have this input field.
+
+if (terminal_type == "CAV" || terminal_type == "CAV-DUAL-DUCT")
+  terminal_min_flow_frac = 1.0
+end
+
+# Set parameter to EnergyPlus-compliant input string for VAV terminal damper control type
+
+vav_damper_control_input = ""
+
+if (vav_damper_control == "SINGLE-MAXIMUM")
+  vav_damper_control_input = "Normal"
+elsif (vav_damper_control == "DUAL-MAXIMUM")
+  vav_damper_control_input = "Reverse"
+else
+  puts "[WARNING] VAV damper control type input doesn't match available options!"
+end
+%>
+
+Sizing:Zone,
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  SupplyAirTemperature,    !- Zone Cooling Design Supply Air Temperature Input Method
+  <%= design_cooling_sat %>,                   !- Zone Cooling Design Supply Air Temperature {C}
+  ,                        !- Zone Cooling Design Supply Air Temperature Difference {deltaC}
+  SupplyAirTemperature,    !- Zone Heating Design Supply Air Temperature Input Method
+  <%= design_heating_sat %>,                      !- Zone Heating Design Supply Air Temperature {C}
+  ,                        !- Zone Heating Design Supply Air Temperature Difference {deltaC}
+  0.0085,                  !- Zone Cooling Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  0.0080,                  !- Zone Heating Design Supply Air Humidity Ratio {kgWater/kgDryAir}
+  <%= zone_name %> Design OA,  !- Design Specification Outdoor Air Object Name
+  ,                        !- Zone Heating Sizing Factor
+  ,                        !- Zone Cooling Sizing Factor
+  DesignDay,               !- Cooling Design Air Flow Method
+  ,                        !- Cooling Design Air Flow Rate {m3/s}
+  ,                        !- Cooling Minimum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Cooling Minimum Air Flow {m3/s}
+  ,                        !- Cooling Minimum Air Flow Fraction
+  DesignDay,               !- Heating Design Air Flow Method
+  ,                        !- Heating Design Air Flow Rate {m3/s}
+  ,                        !- Heating Maximum Air Flow per Zone Floor Area {m3/s-m2}
+  ,                        !- Heating Maximum Air Flow {m3/s}
+  ;                        !- Heating Maximum Air Flow Fraction
+
+DesignSpecification:OutdoorAir,
+  <%= zone_name %> Design OA,  !- Name
+  <%= oa_method %>,        !- Outdoor Air Method
+  <%= oa_person %>,        !- Outdoor Air Flow per Person {m3/s-person}
+  <%= oa_area %>,          !- Outdoor Air Flow per Zone Floor Area {m3/s-m2}
+  <%= oa_zone %>;          !- Outdoor Air Flow per Zone {m3/s}
+
+ZoneControl:Thermostat,
+  <%= zone_name %> Thermostat,  !- Name
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  <%= zone_name %> Thermostat Type Sched,  !- Control Type Schedule Name
+  ThermostatSetpoint:DualSetpoint,  !- Control 1 Object Type
+  <%= zone_name %> Setpoints;  !- Control 1 Name
+
+Schedule:Constant,
+  <%= zone_name %> Thermostat Type Sched,  !- Name
+  Control Type,            !- Schedule Type Limits Name
+  4;                       !- Hourly Value
+
+ThermostatSetpoint:DualSetpoint,
+  <%= zone_name %> Setpoints,  !- Name
+  <%= zone_name %> Heating Setpoint Sch,  !- Heating Setpoint Temperature Schedule Name
+  <%= zone_name %> Cooling Setpoint Sch;  !- Cooling Setpoint Temperature Schedule Name
+
+<% if (heating_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= heating_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Heating Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= heating_setpoint %>;  !- Hourly Value
+<% end %>
+
+<% if (cooling_setpoint_sch) %>
+Schedule:Compact,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+<%= cooling_setpoint_sch %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Cooling Setpoint Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= cooling_setpoint %>;  !- Hourly Value
+<% end %>
+
+ZoneControl:Humidistat,
+  <%= zone_name %> Humidistat,  !- Name
+  <%= zone_name %>,        !- Zone or ZoneList Name
+  <%= zone_name %> Min Humidity Sch,         !- Humidifying Relative Humidity Setpoint Schedule Name
+  <%= zone_name %> Max Humidity Sch;         !- Dehumidifying Relative Humidity Setpoint Schedule Name
+
+<% if (min_humidity_schedule) %>
+Schedule:Compact,
+  <%= zone_name %> Min Humidity Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= min_humidity_schedule %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Min Humidity Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= min_humidity_setpoint %>;  !- Hourly Value
+<% end %>
+
+<% if (max_humidity_schedule) %>
+Schedule:Compact,
+  <%= zone_name %> Max Humidity Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= max_humidity_schedule %>
+<% else %>
+Schedule:Constant,
+  <%= zone_name %> Max Humidity Sch,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  <%= max_humidity_setpoint %>;  !- Hourly Value
+<% end %>
+
+Schedule:Compact,
+  <%= zone_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+ZoneHVAC:EquipmentConnections,
+  <%= zone_name %>,        !- Zone Name
+  <%= zone_name %> Equipment,  !- Zone Conditioning Equipment List Name
+  <%= zone_name %> ATU Outlet Node,  !- Zone Air Inlet Node or NodeList Name
+<% if (exhaust_nodes.length > 0) %>
+  <%= zone_name %> Exhaust Nodes,  !- Zone Air Exhaust Node or NodeList Name
+<% else %>
+  ,                        !- Zone Air Exhaust Node or NodeList Name
+<% end %>
+  <%= zone_name %> Air Node,  !- Zone Air Node Name
+  <%= zone_name %> Return Node;  !- Zone Return Air Node Name
+
+<% if (exhaust_nodes.length > 0) %>
+NodeList,
+  <%= zone_name %> Exhaust Nodes,    !- Name
+  <% Modelkit::EnergyPlus.each(exhaust_nodes) do |node| %>
+  <%= node %>,    !- Node Name
+  <% end %>
+<% end %>
+
+<% if (exhaust_fan) %>
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  Fan:ZoneExhaust,         !- Zone Equipment 1 Object Type
+  <%= zone_name %> Exhaust Fan,  !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Sequence
+  1,                       !- Zone Equipment 1 Heating or No-Load Sequence
+  ZoneHVAC:AirDistributionUnit,  !- Zone Equipment 2 Object Type
+  <%= zone_name %> Air Distribution Unit,  !- Zone Equipment 2 Name
+  2,                       !- Zone Equipment 2 Cooling Sequence
+  2;                       !- Zone Equipment 2 Heating or No-Load Sequence
+<% else %>
+ZoneHVAC:EquipmentList,
+  <%= zone_name %> Equipment,  !- Name
+  SequentialLoad,  !- Load Distribution Scheme
+  ZoneHVAC:AirDistributionUnit,  !- Zone Equipment 1 Object Type
+  <%= zone_name %> Air Distribution Unit,  !- Zone Equipment 1 Name
+  1,                       !- Zone Equipment 1 Cooling Sequence
+  1;                       !- Zone Equipment 1 Heating or No-Load Sequence
+<% end %>
+
+ZoneHVAC:AirDistributionUnit,
+  <%= zone_name %> Air Distribution Unit,  !- Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Distribution Unit Outlet Node Name
+<% if (terminal_type == "CAV-DUAL-DUCT" || terminal_type == "VAV-DUAL-DUCT") %>
+  AirTerminal:DualDuct:VAV,            !- Air Terminal Object Type
+<% elsif (terminal_type == "CAV-INDUCTION") %>
+  AirTerminal:SingleDuct:ConstantVolume:FourPipeInduction,  !- Air Terminal Object Type
+<% elsif (terminal_type == "CAV-CHILLED-BEAM") %>
+  AirTerminal:SingleDuct:ConstantVolume:CooledBeam,  !- Air Terminal Object Type
+<% else %>
+  <% if (heating_coil_type == "NONE") %>
+  AirTerminal:SingleDuct:VAV:NoReheat,  !- Air Terminal Object Type
+  <% else %>
+    <% if (terminal_type == "VAV-PARALLEL-FPB") %>
+  AirTerminal:SingleDuct:ParallelPIU:Reheat,  !- Air Terminal Object Type
+    <% elsif (terminal_type == "VAV-SERIES-FPB") %>
+  AirTerminal:SingleDuct:SeriesPIU:Reheat,  !- Air Terminal Object Type
+    <% else %>
+  AirTerminal:SingleDuct:VAV:Reheat,  !- Air Terminal Object Type
+    <% end %>
+  <% end %>
+<% end %>
+  <%= zone_name %> ATU,            !- Air Terminal Name
+  <%= upstream_duct_leakage %>,            !- Nominal Upstream Leakage Fraction
+  <%= downstream_duct_leakage %>;            !- Constant Downstream Leakage Fraction
+
+<% if (terminal_type == "CAV-DUAL-DUCT" || terminal_type == "VAV-DUAL-DUCT") %>
+AirTerminal:DualDuct:VAV,
+  <%= zone_name %> ATU,                     !- Name
+  <%= zone_name %> Operation Schedule,            !- Availability Schedule Name
+  <%= zone_name %> ATU Outlet Node,                !- Air Outlet Node Name
+  <%= zone_name %> HD Inlet Node,                 !- Hot Air Inlet Node Name
+  <%= zone_name %> CD Inlet Node,                 !- Cold Air Inlet Node Name
+  Autosize,                                       !- Maximum Air Flow Rate {m3/s}
+  <%= terminal_min_flow_frac %>,                                            !- Zone Minimum Air Flow Fraction
+  <%= zone_name %> Design OA;                     !- Design Specification Outdoor Air Object Name
+
+<% elsif (terminal_type == "CAV-INDUCTION") %>
+AirTerminal:SingleDuct:ConstantVolume:FourPipeInduction,
+  <%= zone_name %> ATU,    !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Autosize,                !- Maximum Total Air Flow Rate {m3/s}
+  <%= induction_ratio %>,  !- Induction Ratio
+  <%= zone_name %> ATU Inlet Node,  !- Supply Air Inlet Node Name
+  <%= zone_name %> ATU Secondary Inlet Node,  !- Induced Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Outlet Node Name
+  <%= zone_name %> Terminal Heat Coil Demand Inlet Node,  !- Hot Water Inlet Node Name
+  <%= zone_name %> Terminal Cool Coil Demand Inlet Node,  !- Cold Water Inlet Node Name
+  Coil:Heating:Water,      !- Heating Coil Object Type
+  <%= zone_name %> Terminal Heat Coil,  !- Heating Coil Name
+  Autosize,                !- Maximum Hot Water Flow Rate {m3/s}
+  0.0,                     !- Minimum Hot Water Flow Rate {m3/s}
+  0.001,                  !- Heating Convergence Tolerance
+  Coil:Cooling:Water,      !- Cooling Coil Object Type
+  <%= zone_name %> Terminal Cool Coil,  !- Cooling Coil Name
+  Autosize,                !- Maximum Cold Water Flow Rate {m3/s}
+  0.0,                     !- Minimum Cold Water Flow Rate {m3/s}
+  0.001,                  !- Cooling Convergence Tolerance
+  <%= zone_name %> ATU Mixer;  !- Zone Mixer Name
+
+Coil:Cooling:Water,
+  <%= zone_name %> Terminal Cool Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Autosize,                !- Design Water Flow Rate {m3/s}
+  Autosize,                !- Design Air Flow Rate {m3/s}
+  Autosize,                !- Design Inlet Water Temperature {C}
+  Autosize,                !- Design Inlet Air Temperature {C}
+  Autosize,                !- Design Outlet Air Temperature {C}
+  Autosize,                !- Design Inlet Air Humidity Ratio {kg-H2O/kg-air}
+  Autosize,                !- Design Outlet Air Humidity Ratio {kg-H2O/kg-air}
+  <%= zone_name %> Terminal Cool Coil Demand Inlet Node,  !- Water Inlet Node Name
+  <%= zone_name %> Terminal Cool Coil Demand Outlet Node,  !- Water Outlet Node Name
+  <%= zone_name %> ATU Heating Coil Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> ATU Cooling Coil Outlet Node,  !- Air Outlet Node Name
+  SimpleAnalysis,          !- Type of Analysis
+  CrossFlow,               !- Heat Exchanger Configuration
+  <%= clear_water_storage_tank %>;                        !- Condensate Collection Water Storage Tank Name
+
+Branch,
+  <%= zone_name %> CW Demand Branch,    !- Name
+  ,                        !- Pressure Drop Curve Name
+  Coil:Cooling:Water,      !- Component 1 Object Type
+  <%= zone_name %> Terminal Cool Coil,  !- Component 1 Name
+  <%= zone_name %> Terminal Cool Coil Demand Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> Terminal Cool Coil Demand Outlet Node;  !- Component 1 Outlet Node Name
+
+AirLoopHVAC:ZoneMixer,
+  <%= zone_name %> ATU Mixer,  !- Name
+  <%= zone_name %> ATU Outlet Node,  !- Outlet Node Name
+  <%= zone_name %> ATU Inlet Node,  !- Inlet 1 Node Name
+  <%= zone_name %> ATU Cooling Coil Outlet Node;  !- Inlet 2 Node Name
+
+<% elsif (terminal_type == "CAV-CHILLED-BEAM") %>
+AirTerminal:SingleDuct:ConstantVolume:CooledBeam,
+  <%= zone_name %> ATU,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Active,                  !- Cooled Beam Type
+  <%= zone_name %> ATU Inlet Node,  !- Supply Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node,  !- Supply Air Outlet Node Name
+  <%= zone_name %> Chilled Beam CW Inlet Node,  !- Chilled Water Inlet Node Name
+  <%= zone_name %> Chilled Beam CW Outlet Node,  !- Chilled Water Outlet Node Name
+  Autosize,                !- Supply Air Volumetric Flow Rate {m3/s}
+  ,                        !- Maximum Total Chilled Water Volumetric Flow Rate {m3/s}
+  ,                        !- Number of Beams
+  ,                        !- Beam Length {m}
+  ,                        !- Design Inlet Water Temperature {C}
+  ,                        !- Design Outlet Water Temperature {C}
+  ,                        !- Coil Surface Area per Coil Length {m2/m}
+  ,                        !- Model Parameter a
+  ,                        !- Model Parameter n1
+  ,                        !- Model Parameter n2
+  ,                        !- Model Parameter n3
+  ,                        !- Model Parameter a0 {m2/m}
+  ,                        !- Model Parameter K1
+  ,                        !- Model Parameter n
+  ,                        !- Coefficient of Induction Kin
+  ;                        !- Leaving Pipe Inside Diameter {m}
+
+Branch,
+  <%= zone_name %> CW Demand Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  AirTerminal:SingleDuct:ConstantVolume:CooledBeam,  !- Component 1 Object Type
+  <%= zone_name %> ATU,  !- Component 1 Name
+  <%= zone_name %> Chilled Beam CW Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> Chilled Beam CW Outlet Node;  !- Component 1 Outlet Node Name
+
+<% else %>
+  <% if (heating_coil_type == "NONE") %>
+AirTerminal:SingleDuct:VAV:NoReheat,
+  <%= zone_name %> ATU,    !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Outlet Node Name
+  <%= zone_name %> ATU Inlet Node,  !- Air Inlet Node Name
+  Autosize,                !- Maximum Air Flow Rate {m3/s}
+  Constant,                !- Zone Minimum Air Flow Input Method
+  <%= terminal_min_flow_frac %>,                        !- Constant Minimum Air Flow Fraction
+  ,                        !- Fixed Minimum Air Flow Rate {m3/s}
+  ;                        !- Minimum Air Flow Fraction Schedule Name
+
+  <% else %>
+    <% if (terminal_type == "VAV-PARALLEL-FPB") %>
+AirTerminal:SingleDuct:ParallelPIU:Reheat,
+  <%= zone_name %> ATU,    !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Autosize,                     !- Maximum Primary Air Flow Rate {m3/s}
+  Autosize,                    !- Maximum Secondary Air Flow Rate {m3/s}
+  <%= vav_fpb_min_flow_frac %>,  !- Minimum Primary Air Flow Fraction
+  Autosize,                      !- Fan On Flow Fraction
+  <%= zone_name %> ATU Inlet Node,   !- Supply Air Inlet Node Name
+  <%= zone_name %> ATU Secondary Inlet Node,   !- Secondary Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node,  !- Outlet Node Name
+  <%= zone_name %> ATU Damper Outlet Node,    !- Reheat Coil Air Inlet Node Name
+  <%= zone_name %> ATU Mixer,                !- Zone Mixer Name
+  <%= zone_name %> ATU Fan,                  !- Fan Name
+      <% if (heating_coil_type == "GAS") %>
+  Coil:Heating:Fuel,       !- Reheat Coil Object Type
+      <% elsif (heating_coil_type == "ELECTRIC") %>
+  Coil:Heating:Electric,   !- Reheat Coil Object Type
+      <% elsif (heating_coil_type == "HOTWATER") %>
+  Coil:Heating:Water,      !- Reheat Coil Object Type
+      <% end %>
+  <%= zone_name %> Terminal Heat Coil,  !- Reheat Coil Name
+      <% if (heating_coil_type == "HOTWATER") %>
+  Autosize,                !- Maximum Hot Water or Steam Flow Rate {m3/s}
+  0.0,                     !- Minimum Hot Water or Steam Flow Rate {m3/s}
+  <%= zone_name %> Terminal Heat Coil Demand Inlet Node,  !- Hot Water or Steam Inlet Node Name
+      <% else %>
+  ,                        !- Maximum Hot Water or Steam Flow Rate {m3/s}
+  ,                        !- Minimum Hot Water or Steam Flow Rate {m3/s}
+  ,                        !- Hot Water or Steam Inlet Node Name
+      <% end %>
+  0.001;                   !- Convergence Tolerance
+
+AirLoopHVAC:ZoneMixer,
+  <%= zone_name %> ATU Mixer,      !- Name
+  <%= zone_name %> ATU Damper Outlet Node,  !- Outlet Node Name
+  <%= zone_name %> ATU Inlet Node,    !- Inlet 1 Node Name
+  <%= zone_name %> ATU Fan Outlet Node;  !- Inlet 2 Node Name
+
+Fan:ConstantVolume,
+  <%= zone_name %> ATU Fan,        !- Name
+  <%= zone_name %> Operation Schedule,    !- Availability Schedule Name
+  <%= terminal_fan_eff %>,  !- Fan Efficiency
+  <%= terminal_fan_rise %>,  !- Pressure Rise {Pa}
+  Autosize,                !- Maximum Flow Rate {m3/s}
+  <%= terminal_motor_eff %>,  !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  <%= zone_name %> ATU Secondary Inlet Node,   !- Air Inlet Node Name
+  <%= zone_name %> ATU Fan Outlet Node;  !- Air Outlet Node Name
+
+    <% elsif (terminal_type == "VAV-SERIES-FPB") %>
+AirTerminal:SingleDuct:SeriesPIU:Reheat,
+  <%= zone_name %> ATU,    !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  Autosize,                     !- Maximum Air Flow Rate {m3/s}
+  Autosize,                    !- Maximum Primary Air Flow Rate {m3/s}
+  <%= vav_fpb_min_flow_frac %>,  !- Minimum Primary Air Flow Fraction
+  <%= zone_name %> ATU Inlet Node,   !- Supply Air Inlet Node Name
+  <%= zone_name %> ATU Secondary Inlet Node,   !- Secondary Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node,  !- Outlet Node Name
+  <%= zone_name %> ATU Damper Outlet Node,    !- Reheat Coil Air Inlet Node Name
+  <%= zone_name %> ATU Mixer,                !- Zone Mixer Name
+  <%= zone_name %> ATU Fan,                  !- Fan Name
+      <% if (heating_coil_type == "GAS") %>
+  Coil:Heating:Fuel,       !- Reheat Coil Object Type
+      <% elsif (heating_coil_type == "ELECTRIC") %>
+  Coil:Heating:Electric,   !- Reheat Coil Object Type
+      <% elsif (heating_coil_type == "HOTWATER") %>
+  Coil:Heating:Water,      !- Reheat Coil Object Type
+      <% end %>
+  <%= zone_name %> Terminal Heat Coil,  !- Reheat Coil Name
+      <% if (heating_coil_type == "HOTWATER") %>
+  Autosize,                !- Maximum Hot Water or Steam Flow Rate {m3/s}
+  0.0,                     !- Minimum Hot Water or Steam Flow Rate {m3/s}
+  <%= zone_name %> Terminal Heat Coil Demand Inlet Node,  !- Hot Water or Steam Inlet Node Name
+      <% else %>
+  ,                        !- Maximum Hot Water or Steam Flow Rate {m3/s}
+  ,                        !- Minimum Hot Water or Steam Flow Rate {m3/s}
+  ,                        !- Hot Water or Steam Inlet Node Name
+      <% end %>
+  0.001;                   !- Convergence Tolerance
+
+AirLoopHVAC:ZoneMixer,
+  <%= zone_name %> ATU Mixer,      !- Name
+  <%= zone_name %> ATU Fan Inlet Node,  !- Outlet Node Name
+  <%= zone_name %> ATU Inlet Node,    !- Inlet 1 Node Name
+  <%= zone_name %> ATU Secondary Inlet Node;  !- Inlet 2 Node Name
+
+Fan:ConstantVolume,
+  <%= zone_name %> ATU Fan,        !- Name
+  <%= zone_name %> Operation Schedule,    !- Availability Schedule Name
+  <%= terminal_fan_eff %>,  !- Fan Efficiency
+  <%= terminal_fan_rise %>,  !- Pressure Rise {Pa}
+  Autosize,                !- Maximum Flow Rate {m3/s}
+  <%= terminal_motor_eff %>,  !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  <%= zone_name %> ATU Fan Inlet Node,   !- Air Inlet Node Name
+  <%= zone_name %> ATU Damper Outlet Node;  !- Air Outlet Node Name
+
+    <% else %>
+AirTerminal:SingleDuct:VAV:Reheat,
+  <%= zone_name %> ATU,    !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= zone_name %> ATU Damper Outlet Node,  !- Damper Air Outlet Node Name
+  <%= zone_name %> ATU Inlet Node,  !- Air Inlet Node Name
+  Autosize,                !- Maximum Air Flow Rate {m3/s}
+  Constant,                !- Zone Minimum Air Flow Input Method
+  <%= terminal_min_flow_frac %>,                        !- Constant Minimum Air Flow Fraction
+  ,                        !- Fixed Minimum Air Flow Rate {m3/s}
+  ,                        !- Minimum Air Flow Fraction Schedule Name
+      <% if (heating_coil_type == "GAS") %>
+  Coil:Heating:Fuel,       !- Reheat Coil Object Type
+      <% elsif (heating_coil_type == "ELECTRIC") %>
+  Coil:Heating:Electric,   !- Reheat Coil Object Type
+      <% elsif (heating_coil_type == "HOTWATER") %>
+  Coil:Heating:Water,      !- Reheat Coil Object Type
+      <% end %>
+  <%= zone_name %> Terminal Heat Coil,  !- Reheat Coil Name
+      <% if (heating_coil_type == "HOTWATER") %>
+  Autosize,                !- Maximum Hot Water or Steam Flow Rate {m3/s}
+  0.0,                     !- Minimum Hot Water or Steam Flow Rate {m3/s}
+      <% else %>
+  ,                        !- Maximum Hot Water or Steam Flow Rate {m3/s}
+  ,                        !- Minimum Hot Water or Steam Flow Rate {m3/s}
+      <% end %>
+  <%= zone_name %> ATU Outlet Node,  !- Air Outlet Node Name
+  0.001,                   !- Convergence Tolerance
+  <%= vav_damper_control_input %>,                 !- Damper Heating Action
+  ,               !- Maximum Flow per Zone Floor Area During Reheat {m3/s-m2}
+  ,               !- Maximum Flow Fraction During Reheat
+  <%= max_reheat_air_temp %>,               !- Maximum Reheat Air Temperature
+  <%= zone_name %> Design OA;               !- Design Specification Outdoor Air Object Name
+    <% end %>
+  <% end %>
+<% end %>
+
+<% if (heating_coil_type == "HOTWATER" || terminal_type == "CAV-INDUCTION") %>
+Coil:Heating:Water,
+  <%= zone_name %> Terminal Heat Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  10000,                   !- U-Factor Times Area Value {W/K}
+  Autosize,                !- Maximum Water Flow Rate {m3/s}
+  <%= zone_name %> Terminal Heat Coil Demand Inlet Node,  !- Water Inlet Node Name
+  <%= zone_name %> Terminal Heat Coil Demand Outlet Node,  !- Water Outlet Node Name
+  <% if (terminal_type == "CAV-INDUCTION") %>
+  <%= zone_name %> ATU Secondary Inlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> ATU Heating Coil Outlet Node,  !- Air Outlet Node Name
+  <% else %>
+  <%= zone_name %> ATU Damper Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Outlet Node Name
+  <% end %>
+  UFactorTimesAreaAndDesignWaterFlowRate,  !- Performance Input Method
+  ,                        !- Rated Capacity {W}
+  ,                        !- Rated Inlet Water Temperature {C}
+  ,                        !- Rated Inlet Air Temperature {C}
+  ,                        !- Rated Outlet Water Temperature {C}
+  ;                        !- Rated Outlet Air Temperature {C}
+
+Branch,
+  <%= zone_name %> HW Demand Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Coil:Heating:Water,      !- Component 1 Object Type
+  <%= zone_name %> Terminal Heat Coil,  !- Component 1 Name
+  <%= zone_name %> Terminal Heat Coil Demand Inlet Node,  !- Component 1 Inlet Node Name
+  <%= zone_name %> Terminal Heat Coil Demand Outlet Node;  !- Component 1 Outlet Node Name
+
+<% elsif (heating_coil_type == "GAS") %>
+Coil:Heating:Fuel,
+  <%= zone_name %> Terminal Heat Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  NaturalGas,               !- Fuel Type
+  <%= heating_coil_eff %>,  !- Gas Burner Efficiency
+  Autosize,                !- Nominal Capacity {W}
+  <%= zone_name %> ATU Damper Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node;  !- Air Outlet Node Name
+
+<% elsif (heating_coil_type == "ELECTRIC") %>
+Coil:Heating:Electric,
+  <%= zone_name %> Terminal Heat Coil,  !- Name
+  <%= zone_name %> Operation Schedule,  !- Availability Schedule Name
+  <%= heating_coil_eff %>,  !- Efficiency
+  Autosize,                !- Nominal Capacity {W}
+  <%= zone_name %> ATU Damper Outlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> ATU Outlet Node,  !- Air Outlet Node Name
+  ;                        !- Temperature Setpoint Node Name
+<% end %>
+
+<% if (exhaust_fan) %>
+<%# NOTE: Fan:ZoneExhaust appears to be forced on with night cycling which in turn forces on outdoor air.
+Does not seem possible to do night cycle with exhaust fans without also getting outdoor air during unoccupied hours. %>
+Fan:ZoneExhaust,
+  <%= zone_name %> Exhaust Fan,  !- Name
+  <%= zone_name %> Outdoor Air Schedule,  !- Availability Schedule Name
+  <%= exhaust_fan_eff %>,  !- Fan Efficiency
+  <%= exhaust_fan_rise %>,  !- Pressure Rise {Pa}
+  <%= exhaust_fan_flow %>,  !- Maximum Flow Rate {m3/s}
+  <%= zone_name %> Exhaust Fan Inlet Node,  !- Air Inlet Node Name
+  <%= zone_name %> Exhaust Fan Outlet Node,  !- Air Outlet Node Name
+  Zone Exhaust Fans;       !- End-Use Subcategory
+
+Schedule:Compact,
+  <%= zone_name %> Outdoor Air Schedule,  !- Name
+  Temperature,             !- Schedule Type Limits Name
+<%= operation_schedule %>
+<% end %>
