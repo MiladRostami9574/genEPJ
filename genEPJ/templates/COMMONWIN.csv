@@ -1,0 +1,36 @@
+  WindowMaterial:Gas,
+    Argon 13mm,                !- Name
+    Argon,                     !- Gas Type
+    0.0127;                  !- Thickness {m
+
+  WindowMaterial:Glazing,
+    Clear 3mm,                !- Name
+    SpectralAverage,                !- Optical Data Type Type
+    ,                !- Window Glass Spectral Data Set Name
+    0.00300,             !- Thickness (m)
+    0.83700,             !- Solar Transmittance at Normal Incidence
+    0.07500,             !- Front Side Solar Reflectance at Normal Incidence
+    0.07500,             !- Back Side Solar Reflectance at Normal Incidence
+    0.89800,             !- Visible Transmittance at Normal Incidence
+    0.08100,             !- Front Side Visible Reflectance at Normal Incidencee
+    0.08100,             !- Back Side Visible Reflectance at Normal Incidencee
+    0.00000,             !- Infrared Transmittance at Normal Incidence
+    0.84000,             !- Front Side Infrared Hemispherical Emissivity
+    0.84000,             !- Back Side Infrared Hemispherical Emissivity
+    0.90000;             !- Conductivity {W/m-K}
+
+WindowMaterial:Glazing,
+    Low-e 3mm,                !- Name
+    SpectralAverage,                !- Optical Data Type Type
+    ,                !- Window Glass Spectral Data Set Name
+    0.00300,             !- Thickness (m)
+    0.69200,             !- Solar Transmittance at Normal Incidence
+    0.12200,             !- Front Side Solar Reflectance at Normal Incidence
+    0.11200,             !- Back Side Solar Reflectance at Normal Incidence
+    0.82400,             !- Visible Transmittance at Normal Incidence
+    0.11500,             !- Front Side Visible Reflectance at Normal Incidencee
+    0.11000,             !- Back Side Visible Reflectance at Normal Incidencee
+    0.00000,             !- Infrared Transmittance at Normal Incidence
+    0.15600,             !- Front Side Infrared Hemispherical Emissivity
+    0.84000,             !- Back Side Infrared Hemispherical Emissivity
+    0.90000;             !- Conductivity {W/m-K}

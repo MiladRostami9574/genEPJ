@@ -1,0 +1,8 @@
+  Construction, !- From outside layer (1) to Inside layer (n),
+    TGLEAR,                !- Name
+    Clear 3mm,                !- Layer 1
+    Argon 13mm,                !- Layer 2
+    Clear 3mm,                !- Layer 3
+    Argon 13mm,                !- Layer 4
+    Low-e 3mm;                !- Layer 5
+
