@@ -1,0 +1,36 @@
+
+Sun Feb 28 08:39:15 PM EST 2021
+Works with Ruby 2.6.0 (update to 2.7.2 broke functionality)
+
+install via rbenv, ruby-build (rbenv install 2.6.0)
+
+========================
+Install Windows download
+========================
+
+cd gems/modelkit-0.8.0
+chmod +x bin/modelkit
+dos2unix bin/modelkit
+
+> rake --tasks
+> rake
+> gem install modelkit
+
+cd gems/modelkit-energyplus-0.3.0
+chmod +x bin/modelkit-energyplus
+dos2unix bin/modelkit-energyplus
+
+> rake --tasks
+> rake
+> gem install modelkit-energyplus
+
+Installation appears in '~/.gem/ruby/2.6.0/bin/modelkit'. Add to $PATH to use it directly
+
+=============
+Run it using:
+=============
+
+modelkit template-compose --files="measure.imf" --output="output.idf" root.pxt --dir --dirs ~/Modelkit\ Catalyst/templates/net-zero-templates/templates
+
+2) simple-project:
+odelkit template-compose --files parameters/cases/00_baseline.pxv --output 1.idf templates/root.pxt  --dirs ~/Modelkit\ Catalyst/templates/net-zero-templates/templates
