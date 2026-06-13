@@ -1,0 +1,50 @@
+{
+  "Building": {
+    "name": "Building",
+    "template": {
+      "${name}": {
+        "north_axis": "${north_axis}",
+        "terrain": "${terrain}",
+        "loads_convergence_tolerance_value": "${loads_convergence_tolerance_value}",
+        "temperature_convergence_tolerance_value": "${temperature_convergence_tolerance_value}",
+        "solar_distribution": "${solar_distribution}",
+        "maximum_number_of_warmup_days": "${maximum_number_of_warmup_days}",
+        "minimum_number_of_warmup_days": "${minimum_number_of_warmup_days}"
+      }
+    },
+    "defaults": {
+      "north_axis": 0,
+      "terrain": "Suburbs",
+      "loads_convergence_tolerance_value": 0.04,
+      "temperature_convergence_tolerance_value": 0.4,
+      "solar_distribution": "FullExterior",
+      "maximum_number_of_warmup_days": 25,
+      "minimum_number_of_warmup_days": 6
+    },
+    "required": ["name"]
+  },
+  "Version": {
+    "name": "Version",
+    "template": {
+      "Version 1": {
+        "version_identifier": "${version_identifier}"
+      }
+    },
+    "defaults": {
+      "version_identifier": "9.0"
+    },
+    "required": []
+  },
+  "Timestep": {
+    "name": "Timestep",
+    "template": {
+      "Timestep 1": {
+        "number_of_timesteps_per_hour": "${number_of_timesteps_per_hour}"
+      }
+    },
+    "defaults": {
+      "number_of_timesteps_per_hour": 6
+    },
+    "required": []
+  }
+}
