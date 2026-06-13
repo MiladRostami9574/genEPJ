@@ -1,0 +1,376 @@
+<%#INITIALIZE
+parameter "system_name"
+# should be a different identifier?
+parameter "zone_names"
+
+parameter "design_temp", :default=>140|'F'  # Water heater setpoint and system supply temperature
+parameter "design_delta", :default=>9|'deltaF'
+
+parameter "pump_eff", :default=>1.0
+parameter "pump_head", :default=>0|'ft H2O'  # Assume no pump energy if flow is driven by mains pressure
+
+parameter "water_heater_volume", :default=>"Autosize"  # Storage volume of residential DHW tank
+parameter "water_heater_fuel", :default=>'NaturalGas'  # Water heater fuel type (NaturalGas | Electricity | DistrictHeating)
+parameter "water_heater_capacity", :default=>"Autosize"  # Water heater max heating capacity
+parameter "water_heater_eff", :default=>0.8  # Water heater nominal efficiency
+
+parameter "operation_schedule", :default=>
+"
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00, 1.0;       !- Field 3
+"
+
+parameter "peak_draw_time", :default=>1.0 # Input in units of hour
+parameter "storage_recovery_time", :default=>0.5 # Input in units of hour
+
+parameter "number_of_bedrooms", :default=>nil # Number of bedrooms in residential models (DON'T use for commercial models)
+parameter "number_of_bathrooms", :default=>nil # Number of bathrooms in residential models (DON'T use for commercial models)
+
+parameter "water_heater_ambient_method", :default=>"TEMPERATURE"  # (TEMPERATURE | ZONE | OUTDOORS)
+parameter "water_heater_ambient_temp", :default=>70|'F'  # Only used if using TEMPERATURE method
+parameter "water_heater_ambient_zone", :default=>nil  # Only used if using ZONE method
+
+parameter "preheat_system_name", :default=>nil  # Name of plant loop heating source to connect a storage tank; for use with solar collectors, chiller heat recovery, CHP, etc.
+
+%>
+
+<%
+water_heater_design_mode = "" # string used to set Autosize method used in WaterHeater:Sizing object
+if (water_heater_capacity == "Autosize" || water_heater_volume == "Autosize")
+  if (number_of_bedrooms)
+    water_heater_design_mode = "ResidentialHUD-FHAMinimum"
+  else
+    water_heater_design_mode = "PeakDraw"
+  end
+end
+
+nominal_tank_volume = 0.15 # Nominal Tank Volume for Autosizing Plant Connections {m3}, equivalent to 40 gal
+
+%>
+
+Sizing:Plant,
+  <%= system_name %>,  !- Plant or Condenser Loop Name
+  Heating,                 !- Loop Type
+  <%= design_temp %>,  !- Design Loop Exit Temperature {C}
+  <%= design_delta %>;                    !- Loop Design Temperature Difference {deltaC}
+<%# NOTE: Design temperature difference does not affect water heater sizing. %>
+
+Schedule:Compact,
+  <%= system_name %> Operation Schedule,  !- Name
+  On/Off,                  !- Schedule Type Limits Name
+<%= operation_schedule %>
+
+PlantLoop,
+  <%= system_name %>,  !- Name
+  Water,                   !- Fluid Type
+  ,                        !- User Defined Fluid Type
+  <%= system_name %> Loop Operation Scheme List,  !- Plant Equipment Operation Scheme Name
+  <%= system_name %> Supply Outlet Node,  !- Loop Temperature Setpoint Node Name
+  100.0,                   !- Maximum Loop Temperature {C}
+  10.0,                    !- Minimum Loop Temperature {C}
+  Autosize,                !- Maximum Loop Flow Rate {m3/s}
+  0.0,                     !- Minimum Loop Flow Rate {m3/s}
+  Autosize,                !- Plant Loop Volume {m3}
+  <%= system_name %> Supply Inlet Node,  !- Plant Side Inlet Node Name
+  <%= system_name %> Supply Outlet Node,  !- Plant Side Outlet Node Name
+  <%= system_name %> Supply Branches, !- Plant Side Branch List Name
+  <%= system_name %> Supply Connectors,  !- Plant Side Connector List Name
+  <%= system_name %> Demand Inlet Node,  !- Demand Side Inlet Node Name
+  <%= system_name %> Demand Outlet Node,  !- Demand Side Outlet Node Name
+  <%= system_name %> Demand Branches, !- Demand Side Branch List Name
+  <%= system_name %> Demand Connectors,  !- Demand Side Connector List Name
+  Optimal,                 !- Load Distribution Scheme
+  <%= system_name %> Availability Managers;  !- Availability Manager List Name
+
+<%# NOTE:  Availability manager added above because of problems seen with lack of a manager in the heat recovery loop. %>
+
+SetpointManager:Scheduled,
+  <%= system_name %> Loop Setpoint Manager,  !- Name
+  Temperature,             !- Control Variable
+  <%= system_name %> Supply Temperature Schedule,  !- Schedule Name
+  <%= system_name %> Supply Outlet Node;  !- Setpoint Node or NodeList Name
+
+Schedule:Constant,
+  <%= system_name %> Supply Temperature Schedule,  !- Name
+  Temperature,             !- Schedule Type Limits Name
+  <%= design_temp %>;  !- Hourly Value
+
+PlantEquipmentOperationSchemes,
+  <%= system_name %> Loop Operation Scheme List,  !- Name
+  PlantEquipmentOperation:Uncontrolled,  !- Control Scheme 1 Object Type
+  <%= system_name %> Operation Scheme,!- Control Scheme 1 Name
+  <%= system_name %> Operation Schedule;  !- Control Scheme 1 Schedule Name
+
+PlantEquipmentOperation:Uncontrolled,
+  <%= system_name %> Operation Scheme,!- Name
+  <%= system_name %> Equipment List;  !- Priority Control 1 Equipment List Name
+
+PlantEquipmentList,
+  <%= system_name %> Equipment List;  !- Name
+
+AvailabilityManagerAssignmentList,
+  <%= system_name %> Availability Managers,  !- Name
+  AvailabilityManager:Scheduled,  !- Availability Manager 1 Object Type
+  <%= system_name %> Availability Manager;  !- Availability Manager 1 Name
+
+AvailabilityManager:Scheduled,
+  <%= system_name %> Availability Manager,  !- Name
+  <%= system_name %> Operation Schedule;  !- Schedule Name
+
+BranchList,
+  <%= system_name %> Supply Branches, !- Name
+  <%= system_name %> Supply Inlet Branch,  !- Branch 1 Name
+  <%= system_name %> Supply Equipment Branch,  !- Branch 2 Name
+  <%= system_name %> Supply Equipment Bypass Branch,  !- Branch 3 Name
+  <%= system_name %> Supply Outlet Branch;  !- Branch 4 Name
+
+Branch,
+  <%= system_name %> Supply Inlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pump:VariableSpeed,      !- Component 1 Object Type
+  <%= system_name %> Pump,            !- Component 1 Name
+  <%= system_name %> Supply Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Pump Outlet Node;  !- Component 1 Outlet Node Name
+
+Pump:VariableSpeed,
+  <%= system_name %> Pump,            !- Name
+  <%= system_name %> Supply Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Pump Outlet Node,  !- Outlet Node Name
+  Autosize,                !- Rated Flow Rate {m3/s}
+  <%= pump_head %>,  !- Rated Pump Head {Pa}
+  Autosize,                !- Rated Power Consumption {W}
+  <%= pump_eff %>,  !- Motor Efficiency
+  0.0,                     !- Fraction of Motor Inefficiencies to Fluid Stream
+  0,                       !- Coefficient 1 of the Part Load Performance Curve
+  1,                       !- Coefficient 2 of the Part Load Performance Curve
+  0,                       !- Coefficient 3 of the Part Load Performance Curve
+  0,                       !- Coefficient 4 of the Part Load Performance Curve
+  0.0,                     !- Minimum Flow Rate {m3/s}
+  Intermittent;            !- Pump Control Type
+
+Branch,
+  <%= system_name %> Supply Equipment Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+<% if (preheat_system_name) %>
+  WaterHeater:Mixed,       !- Component 1 Object Type
+  <%= preheat_system_name %> Storage Tank,  !- Component 1 Name
+  <%= preheat_system_name %> Storage Tank Use Inlet Node,  !- Component 1 Inlet Node Name
+  <%= preheat_system_name %> Storage Tank Use Outlet Node,  !- Component 1 Outlet Node Name
+  WaterHeater:Mixed,       !- Component 2 Object Type
+  <%= system_name %> Water Heater,  !- Component 2 Name
+  <%= preheat_system_name %> Storage Tank Use Outlet Node,  !- Component 2 Inlet Node Name
+  <%= system_name %> Water Heater Outlet Node;  !- Component 2 Outlet Node Name
+<% else %>
+  WaterHeater:Mixed,       !- Component 1 Object Type
+  <%= system_name %> Water Heater,  !- Component 1 Name
+  <%= system_name %> Water Heater Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Water Heater Outlet Node;  !- Component 1 Outlet Node Name
+<% end %>
+
+WaterHeater:Sizing,
+  <%= system_name %> Water Heater,  !- WaterHeater Name
+  <%= water_heater_design_mode %>,  !- Design Mode
+  <%= peak_draw_time %>,  !- Time Storage Can Meet Peak Draw {hr}
+  <%= storage_recovery_time %>,  !- Time for Tank Recovery {hr}
+  <%= nominal_tank_volume %>,  !- Nominal Tank Volume for Autosizing Plant Connections {m3}
+  <%= number_of_bedrooms %>,  !- Number of Bedrooms
+  <%= number_of_bathrooms %>,  !- Number of Bathrooms
+  ,                        !- Storage Capacity per Person {m3/Person}
+  ,                        !- Recovery Capacity per Person {m3/hr-person}
+  ,                        !- Storage Capacity per Floor Area {m3/m2}
+  ,                        !- Recovery Capacity per Floor Area {m3/hr-m2}
+  ,                        !- Number of Units
+  ,                        !- Storage Capacity per Unit {m3}
+  ,                        !- Recovery Capacity PerUnit {m3/hr}
+  ,                        !- Storage Capacity per Collector Area {m3/m2}
+  ;                        !- Height Aspect Ratio
+
+WaterHeater:Mixed,
+  <%= system_name %> Water Heater,  !- Name
+  <%= water_heater_volume %>,  !- Tank Volume {m3}
+  <%= system_name %> Water Heater Setpoint Temperature Schedule,  !- Setpoint Temperature Schedule Name
+  2.0,                     !- Deadband Temperature Difference {deltaC}
+  100.0,                   !- Maximum Temperature Limit {C}
+  Cycle,                   !- Heater Control Type
+  <%= water_heater_capacity %>,  !- Heater Maximum Capacity {W}
+  ,                        !- Heater Minimum Capacity {W}
+  ,                        !- Heater Ignition Minimum Flow Rate {m3/s}
+  ,                        !- Heater Ignition Delay {s}
+  <%= water_heater_fuel %>,  !- Heater Fuel Type
+  <%= water_heater_eff %>,  !- Heater Thermal Efficiency
+  ,                        !- Part Load Factor Curve Name
+  20,                      !- Off Cycle Parasitic Fuel Consumption Rate {W}
+  <%= water_heater_fuel %>,  !- Off Cycle Parasitic Fuel Type
+  0.8,                     !- Off Cycle Parasitic Heat Fraction to Tank
+  ,                        !- On Cycle Parasitic Fuel Consumption Rate {W}
+  <%= water_heater_fuel %>,  !- On Cycle Parasitic Fuel Type
+  ,                        !- On Cycle Parasitic Heat Fraction to Tank
+<% if (water_heater_ambient_method == "TEMPERATURE") %>
+  Schedule,                !- Ambient Temperature Indicator
+  <%= system_name %> Water Heater Ambient Temperature Schedule,  !- Ambient Temperature Schedule Name
+  ,                        !- Ambient Temperature Zone Name
+  ,                        !- Ambient Temperature Outdoor Air Node Name
+<% elsif (water_heater_ambient_method == "ZONE") %>
+  Zone,                    !- Ambient Temperature Indicator
+  ,                        !- Ambient Temperature Schedule Name
+  <%= water_heater_ambient_zone %>,  !- Ambient Temperature Zone Name
+  ,                        !- Ambient Temperature Outdoor Air Node Name
+<% elsif (water_heater_ambient_method == "OUTDOORS") %>
+  Outdoors,                !- Ambient Temperature Indicator
+  ,                        !- Ambient Temperature Schedule Name
+  ,                        !- Ambient Temperature Zone Name
+  <%= system_name %> Outdoor Air Node,  !- Ambient Temperature Outdoor Air Node Name
+<% end %>
+  6.0,                     !- Off Cycle Loss Coefficient to Ambient Temperature {W/K}
+  ,                        !- Off Cycle Loss Fraction to Zone
+  6.0,                     !- On Cycle Loss Coefficient to Ambient Temperature {W/K}
+  ,                        !- On Cycle Loss Fraction to Zone
+  ,                        !- Peak Use Flow Rate {m3/s}
+  ,                        !- Use Flow Rate Fraction Schedule Name
+  ,                        !- Cold Water Supply Temperature Schedule Name
+<% if (preheat_system_name) %>
+  <%= preheat_system_name %> Storage Tank Use Outlet Node,  !- Use Side Inlet Node Name
+<% else %>
+  <%= system_name %> Water Heater Inlet Node,  !- Use Side Inlet Node Name
+<% end %>
+  <%= system_name %> Water Heater Outlet Node,  !- Use Side Outlet Node Name
+  1.0,                     !- Use Side Effectiveness
+  ,                        !- Source Side Inlet Node Name
+  ,                        !- Source Side Outlet Node Name
+  ,                        !- Source Side Effectiveness
+  Autosize;                !- Use Side Design Flow Rate {m3/s}
+
+Schedule:Constant,
+  <%= system_name %> Water Heater Setpoint Temperature Schedule,  !- Name
+  Temperature,             !- Schedule Type Limits Name
+  <%= design_temp %>;  !- Hourly Value
+
+<% if (water_heater_ambient_method == "TEMPERATURE") %>
+Schedule:Constant,
+  <%= system_name %> Water Heater Ambient Temperature Schedule,  !- Name
+  Temperature,             !- Schedule Type Limits Name
+  <%= water_heater_ambient_temp %>;  !- Hourly Value
+<% elsif (water_heater_ambient_method == "OUTDOORS") %>
+OutdoorAir:Node,
+  <%= system_name %> Outdoor Air Node;  !- Name
+<% end %>
+
+Branch,
+  <%= system_name %> Supply Equipment Bypass Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  TemperingValve,          !- Component 1 Object Type
+  <%= system_name %> Tempering Valve,  !- Component 1 Name
+  <%= system_name %> Tempering Valve Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Tempering Valve Outlet Node;  !- Component 1 Outlet Node Name
+
+TemperingValve,
+  <%= system_name %> Tempering Valve,  !- Name
+  <%= system_name %> Tempering Valve Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Tempering Valve Outlet Node,  !- Outlet Node Name
+  <%= system_name %> Water Heater Outlet Node,  !- Stream 2 Source Node Name
+  <%= system_name %> Supply Outlet Node,  !- Temperature Setpoint Node Name
+  <%= system_name %> Pump Outlet Node;  !- Pump Outlet Node Name
+
+Branch,
+  <%= system_name %> Supply Outlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  <%= system_name %> Supply Outlet Pipe,  !- Component 1 Name
+  <%= system_name %> Supply Outlet Pipe Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Supply Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  <%= system_name %> Supply Outlet Pipe,  !- Name
+  <%= system_name %> Supply Outlet Pipe Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Supply Outlet Node;  !- Outlet Node Name
+
+ConnectorList,
+  <%= system_name %> Supply Connectors,  !- Name
+  Connector:Splitter,      !- Connector 1 Object Type
+  <%= system_name %> Supply Splitter, !- Connector 1 Name
+  Connector:Mixer,         !- Connector 2 Object Type
+  <%= system_name %> Supply Mixer;    !- Connector 2 Name
+
+Connector:Splitter,
+  <%= system_name %> Supply Splitter, !- Name
+  <%= system_name %> Supply Inlet Branch,  !- Inlet Branch Name
+  <%= system_name %> Supply Equipment Branch,  !- Outlet Branch 1 Name
+  <%= system_name %> Supply Equipment Bypass Branch;  !- Outlet Branch 2 Name
+
+Connector:Mixer,
+  <%= system_name %> Supply Mixer,    !- Name
+  <%= system_name %> Supply Outlet Branch,  !- Outlet Branch Name
+  <%= system_name %> Supply Equipment Branch,  !- Inlet Branch 1 Name
+  <%= system_name %> Supply Equipment Bypass Branch;  !- Inlet Branch 2 Name
+
+BranchList,
+  <%= system_name %> Demand Branches,!- Name
+  <%= system_name %> Demand Inlet Branch,  !- Branch Name
+<% for zone_name in zone_names %>
+  <%= zone_name %> DHW Demand Branch,  !- Branch Name
+<% end %>
+  <%= system_name %> Demand Bypass Branch,  !- Branch Name
+  <%= system_name %> Demand Outlet Branch;  !- Branch Name
+
+Branch,
+  <%= system_name %> Demand Inlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  <%= system_name %> Demand Inlet Pipe,  !- Component 1 Name
+  <%= system_name %> Demand Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Demand Inlet Pipe Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  <%= system_name %> Demand Inlet Pipe,  !- Name
+  <%= system_name %> Demand Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Demand Inlet Pipe Outlet Node;  !- Outlet Node Name
+
+Branch,
+  <%= system_name %> Demand Bypass Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  <%= system_name %> Demand Bypass Pipe,  !- Component 1 Name
+  <%= system_name %> Demand Bypass Pipe Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Demand Bypass Pipe Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  <%= system_name %> Demand Bypass Pipe,  !- Name
+  <%= system_name %> Demand Bypass Pipe Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Demand Bypass Pipe Outlet Node;  !- Outlet Node Name
+
+Branch,
+  <%= system_name %> Demand Outlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  <%= system_name %> Demand Outlet Pipe,  !- Component 1 Name
+  <%= system_name %> Demand Outlet Pipe Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Demand Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  <%= system_name %> Demand Outlet Pipe,  !- Name
+  <%= system_name %> Demand Outlet Pipe Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Demand Outlet Node;  !- Outlet Node Name
+
+ConnectorList,
+  <%= system_name %> Demand Connectors,  !- Name
+  Connector:Splitter,      !- Connector 1 Object Type
+  <%= system_name %> Demand Splitter,!- Connector 1 Name
+  Connector:Mixer,         !- Connector 2 Object Type
+  <%= system_name %> Demand Mixer;   !- Connector 2 Name
+
+Connector:Splitter,
+  <%= system_name %> Demand Splitter,!- Name
+  <%= system_name %> Demand Inlet Branch,  !- Inlet Branch Name
+<% for zone_name in zone_names %>
+  <%= zone_name %> DHW Demand Branch,  !- Outlet Branch Name
+<% end %>
+  <%= system_name %> Demand Bypass Branch;  !- Outlet Branch Name
+
+Connector:Mixer,
+  <%= system_name %> Demand Mixer,   !- Name
+  <%= system_name %> Demand Outlet Branch,  !- Outlet Branch Name
+<% for zone_name in zone_names %>
+  <%= zone_name %> DHW Demand Branch,  !- Inlet Branch Name
+<% end %>
+  <%= system_name %> Demand Bypass Branch;  !- Inlet Branch Name

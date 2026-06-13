@@ -1,0 +1,260 @@
+
+##ifndef Require_HW_System[]
+  ##set1 Require_HW_System = NO
+##endif
+
+##if #[ Require_HW_System[] EQS YES ]
+
+##set1 Pump_Head_HW_Recirc_SI = #[ Pump_Head_HW_Recirc[] * 2989 ]
+##set1 Pump_Flow_HW_Recirc_SI = #[ Pump_Flow_HW_Recirc[] / 15850.32 ]
+
+##set1 Supply_HW_Temp_SI = #[ #[ Supply_HW_Temp[] - 32.0 ] * #[ 5.0 / 9.0 ] ]
+##set1 Supply_HW_Delta_SI = #[ Supply_HW_Delta[] * #[ 5.0 / 9.0 ] ]
+
+##! This loop solely models the energy used by the recirculation pumps of a central hot water system.
+##! The recirc part was separated out because of serious bugs in the common pipe / primary-secondary model.
+
+PlantLoop,
+  HW Recirc Loop,          !- Name
+  WATER,                   !- Fluid Type
+  ,                        !- User Defined Fluid Type
+  HW Recirc Loop Operation Scheme List,  !- Plant Equipment Operation Scheme Name
+  HW Recirc Supply Outlet Node,  !- Loop Temperature Setpoint Node Name
+  100.0,                   !- Maximum Loop Temperature {C}
+  10.0,                    !- Minimum Loop Temperature {C}
+  AUTOSIZE,                !- Maximum Loop Flow Rate {m3/s}
+  0.0,                     !- Minimum Loop Flow Rate {m3/s}
+  AUTOSIZE,                !- Plant Loop Volume {m3}
+  HW Recirc Supply Inlet Node,  !- Plant Side Inlet Node Name
+  HW Recirc Supply Outlet Node,  !- Plant Side Outlet Node Name
+  HW Recirc Supply Branches,  !- Plant Side Branch List Name
+  HW Recirc Supply Connectors,  !- Plant Side Connector List Name
+  HW Recirc Demand Inlet Node,  !- Demand Side Inlet Node Name
+  HW Recirc Demand Outlet Node,  !- Demand Side Outlet Node Name
+  HW Recirc Demand Branches,  !- Demand Side Branch List Name
+  HW Recirc Demand Connectors,  !- Demand Side Connector List Name
+  Optimal,                 !- Load Distribution Scheme
+  HW Recirc Availability Managers;  !- Availability Manager List Name
+
+##! NOTE:  Availability manager added above because of problems seen with lack of a manager in the heat recovery loop.
+
+Sizing:Plant,
+  HW Recirc Loop,          !- Plant or Condenser Loop Name
+  Heating,                 !- Loop Type
+  Supply_HW_Temp_SI[],     !- Design Loop Exit Temperature {C}
+  Supply_HW_Delta_SI[];    !- Loop Design Temperature Difference {deltaC}
+
+SetpointManager:Scheduled,
+  HW Recirc Loop Setpoint Manager,  !- Name
+  Temperature,             !- Control Variable
+  HW Recirc Temp Schedule,  !- Schedule Name
+  HW Recirc Supply Outlet Node;  !- Setpoint Node or NodeList Name
+
+Schedule:Constant,
+  HW Recirc Temp Schedule,  !- Name
+  Temperature,             !- Schedule Type Limits Name
+  Supply_HW_Temp_SI[];     !- Hourly Value
+
+PlantEquipmentOperationSchemes,
+  HW Recirc Loop Operation Scheme List,  !- Name
+  PlantEquipmentOperation:HeatingLoad,  !- Control Scheme 1 Object Type
+  HW Recirc Operation Scheme,  !- Control Scheme 1 Name
+  ALWAYS_ON;            !- Control Scheme 1 Schedule Name
+
+PlantEquipmentOperation:HeatingLoad,
+  HW Recirc Operation Scheme,  !- Name
+  0.0,                     !- Load Range 1 Lower Limit {W}
+  1000000000000000,        !- Load Range 1 Upper Limit {W}
+  HW Recirc Equipment List; !- Priority Control 1 Equipment List Name
+
+PlantEquipmentList,
+  HW Recirc Equipment List, !- Name
+  DistrictHeating,         !- Equipment 1 Object Type
+  HW Recirc District Heating;  !- Equipment 1 Name
+
+AvailabilityManagerAssignmentList,
+  HW Recirc Availability Managers,  !- Name
+  AvailabilityManager:Scheduled,  !- Availability Manager 1 Object Type
+  HW Recirc Availability Manager;  !- Availability Manager 1 Name
+
+AvailabilityManager:Scheduled,
+  HW Recirc Availability Manager,  !- Name
+  ALWAYS_ON;               !- Schedule Name
+
+BranchList,
+  HW Recirc Supply Branches,!- Name
+  HW Recirc Supply Inlet Branch,  !- Branch 1 Name
+  HW Recirc Supply Equipment Branch,  !- Branch 2 Name
+  HW Recirc Supply Equipment Bypass Branch,  !- Branch 3 Name
+  HW Recirc Supply Outlet Branch;  !- Branch 4 Name
+
+ConnectorList,
+  HW Recirc Supply Connectors,  !- Name
+  Connector:Splitter,      !- Connector 1 Object Type
+  HW Recirc Supply Splitter,!- Connector 1 Name
+  Connector:Mixer,         !- Connector 2 Object Type
+  HW Recirc Supply Mixer;   !- Connector 2 Name
+
+Connector:Splitter,
+  HW Recirc Supply Splitter,!- Name
+  HW Recirc Supply Inlet Branch,  !- Inlet Branch Name
+  HW Recirc Supply Equipment Branch,  !- Outlet Branch 1 Name
+  HW Recirc Supply Equipment Bypass Branch;  !- Outlet Branch 2 Name
+
+Connector:Mixer,
+  HW Recirc Supply Mixer,   !- Name
+  HW Recirc Supply Outlet Branch,  !- Outlet Branch Name
+  HW Recirc Supply Equipment Branch,  !- Inlet Branch 1 Name
+  HW Recirc Supply Equipment Bypass Branch;  !- Inlet Branch 2 Name
+
+Branch,
+  HW Recirc Supply Inlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pump:ConstantSpeed,      !- Component 1 Object Type
+  HW Recirc Pump,          !- Component 1 Name
+  HW Recirc Supply Inlet Node,  !- Component 1 Inlet Node Name
+  HW Recirc Pump-HW Recirc BoilerNodeviaConnector;  !- Component 1 Outlet Node Name
+
+Pump:ConstantSpeed,
+  HW Recirc Pump,          !- Name
+  HW Recirc Supply Inlet Node,  !- Inlet Node Name
+  HW Recirc Pump-HW Recirc BoilerNodeviaConnector,  !- Outlet Node Name
+  Pump_Flow_HW_Recirc_SI[],  !- Rated Flow Rate {m3/s}
+  Pump_Head_HW_Recirc_SI[],  !- Rated Pump Head {Pa}
+  AUTOSIZE,                !- Rated Power Consumption {W}
+  Pump_Eff_HW_Recirc[],    !- Motor Efficiency
+  0.0,                     !- Fraction of Motor Inefficiencies to Fluid Stream
+  Continuous;              !- Pump Control Type
+
+Branch,
+  HW Recirc Supply Equipment Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  DistrictHeating,         !- Component 1 Object Type
+  HW Recirc District Heating,  !- Component 1 Name
+  HW Recirc District Heating Inlet Node,  !- Component 1 Inlet Node Name
+  HW Recirc District Heating Outlet Node;  !- Component 1 Outlet Node Name
+
+DistrictHeating,
+  HW Recirc District Heating,  !- Name
+  HW Recirc District Heating Inlet Node,  !- Hot Water Inlet Node Name
+  HW Recirc District Heating Outlet Node,  !- Hot Water Outlet Node Name
+  0;                       !- Nominal Capacity {W}
+
+Branch,
+  HW Recirc Supply Equipment Bypass Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  HW Recirc Supply Equipment Bypass Pipe,  !- Component 1 Name
+  HW Recirc Supply Equip Bypass Inlet Node,  !- Component 1 Inlet Node Name
+  HW Recirc Supply Equip Bypass Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  HW Recirc Supply Equipment Bypass Pipe,  !- Name
+  HW Recirc Supply Equip Bypass Inlet Node,  !- Inlet Node Name
+  HW Recirc Supply Equip Bypass Outlet Node;  !- Outlet Node Name
+
+Branch,
+  HW Recirc Supply Outlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  HW Recirc Supply Outlet Pipe,  !- Component 1 Name
+  HW Recirc Supply Mixer-HW Recirc Supply Outlet Pipe,  !- Component 1 Inlet Node Name
+  HW Recirc Supply Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  HW Recirc Supply Outlet Pipe,  !- Name
+  HW Recirc Supply Mixer-HW Recirc Supply Outlet Pipe,  !- Inlet Node Name
+  HW Recirc Supply Outlet Node;  !- Outlet Node Name
+
+BranchList,
+  HW Recirc Demand Branches,!- Name
+  HW Recirc Demand Inlet Branch,  !- Branch Name
+  HW Recirc Demand Load Branch 1,  !- Branch Name
+  HW Recirc Demand Bypass Branch,  !- Branch Name
+  HW Recirc Demand Outlet Branch;  !- Branch Name
+
+ConnectorList,
+  HW Recirc Demand Connectors,  !- Name
+  Connector:Splitter,      !- Connector 1 Object Type
+  HW Recirc Demand Splitter,!- Connector 1 Name
+  Connector:Mixer,         !- Connector 2 Object Type
+  HW Recirc Demand Mixer;   !- Connector 2 Name
+
+Connector:Splitter,
+  HW Recirc Demand Splitter,!- Name
+  HW Recirc Demand Inlet Branch,  !- Inlet Branch Name
+  HW Recirc Demand Load Branch 1,  !- Outlet Branch Name
+  HW Recirc Demand Bypass Branch;  !- Outlet Branch Name
+
+Connector:Mixer,
+  HW Recirc Demand Mixer,   !- Name
+  HW Recirc Demand Outlet Branch,  !- Outlet Branch Name
+  HW Recirc Demand Load Branch 1,  !- Inlet Branch Name
+  HW Recirc Demand Bypass Branch;  !- Inlet Branch Name
+
+Branch,
+  HW Recirc Demand Inlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  HW Recirc Demand Inlet Pipe,  !- Component 1 Name
+  HW Recirc Demand Inlet Node,  !- Component 1 Inlet Node Name
+  HW Recirc Demand Inlet Pipe Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  HW Recirc Demand Inlet Pipe,  !- Name
+  HW Recirc Demand Inlet Node,  !- Inlet Node Name
+  HW Recirc Demand Inlet Pipe Outlet Node;  !- Outlet Node Name
+
+Branch,
+  HW Recirc Demand Load Branch 1,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  LoadProfile:Plant,       !- Component 1 Object Type
+  HW Recirc Load Profile,  !- Component 1 Name
+  HW Recirc Load Profile Inlet Node,  !- Component 1 Inlet Node Name
+  HW Recirc Load Profile Outlet Node;  !- Component 1 Outlet Node Name
+
+LoadProfile:Plant,
+  HW Recirc Load Profile,  !- Name
+  HW Recirc Load Profile Inlet Node,  !- Inlet Node Name
+  HW Recirc Load Profile Outlet Node,  !- Outlet Node Name
+  HW Recirc Load Profile Schedule,  !- Load Schedule Name
+  1,                       !- Peak Flow Rate {m3/s}
+  HW Recirc Load Profile Flow Schedule;  !- Flow Rate Fraction Schedule Name
+
+Schedule:Constant,
+  HW Recirc Load Profile Schedule,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  0;                       !- Hourly Value
+
+Schedule:Constant,
+  HW Recirc Load Profile Flow Schedule,  !- Name
+  Fraction,                !- Schedule Type Limits Name
+  0;                       !- Hourly Value
+
+Branch,
+  HW Recirc Demand Bypass Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  HW Recirc Demand Bypass Pipe,  !- Component 1 Name
+  HW Recirc Demand Bypass Pipe Inlet Node,  !- Component 1 Inlet Node Name
+  HW Recirc Demand Bypass Pipe Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  HW Recirc Demand Bypass Pipe,  !- Name
+  HW Recirc Demand Bypass Pipe Inlet Node,  !- Inlet Node Name
+  HW Recirc Demand Bypass Pipe Outlet Node;  !- Outlet Node Name
+
+Branch,
+  HW Recirc Demand Outlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  HW Recirc Demand Outlet Pipe,  !- Component 1 Name
+  HW Recirc Demand Mixer-HW Recirc Demand Outlet Pipe,  !- Component 1 Inlet Node Name
+  HW Recirc Demand Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  HW Recirc Demand Outlet Pipe,  !- Name
+  HW Recirc Demand Mixer-HW Recirc Demand Outlet Pipe,  !- Inlet Node Name
+  HW Recirc Demand Outlet Node;  !- Outlet Node Name
+
+##endif

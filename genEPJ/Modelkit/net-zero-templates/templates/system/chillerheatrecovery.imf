@@ -1,0 +1,265 @@
+<%#INITIALIZE
+parameter "system_name"
+
+parameter "design_flow", :default=>"Autosize"
+parameter "design_temp", :default=>180|'F'
+parameter "design_delta", :default=>50|'deltaF'
+
+parameter "pump_eff", :default=>0.6
+parameter "pump_head", :default=>70|'ft H2O'
+parameter "pump_power", :default=>"Autosize"
+
+parameter "chiller_heatpump_hr", :default=>false  # Chiller heat pump heat recovery
+parameter "chiller_cond_hr", :default=>false  # Chiller condenser heat recovery
+parameter "chiller_hr_temp", :default=>155|'F'  # Chiller heat pump heat recovery
+
+%>
+
+Sizing:Plant,
+  <%= system_name %> Chiller Heat Recovery,  !- Plant or Condenser Loop Name
+  Heating,                 !- Loop Type
+  <%= design_temp %>,  !- Design Loop Exit Temperature {C}
+  <%= design_delta %>;  !- Loop Design Temperature Difference {deltaC}
+
+CondenserLoop,
+  <%= system_name %> Chiller Heat Recovery,         !- Name
+  Water,                   !- Fluid Type
+  ,                        !- User Defined Fluid Type
+  <%= system_name %> Chiller Heat Recovery Operation Scheme List,  !- Plant Equipment Operation Scheme Name
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Node,  !- Loop Temperature Setpoint Node Name
+  98.0,                    !- Maximum Loop Temperature {C}
+  10,                     !- Minimum Loop Temperature {C}
+  Autosize,       !- Maximum Loop Flow Rate {m3/s}
+  0.0,                     !- Minimum Loop Flow Rate {m3/s}
+  Autocalculate,           !- Condenser Loop Volume {m3}
+  <%= system_name %> Chiller Heat Recovery Pump Inlet Node,  !- Supply Side Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Node,  !- Supply Side Outlet Node Name
+  <%= system_name %> Chiller Heat Recovery Supply Branches,  !- Supply Side Branch List Name
+  <%= system_name %> Chiller Heat Recovery Supply Connectors,  !- Supply Side Connector List Name
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Node,  !- Demand Side Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Demand Outlet Node,  !- Demand Side Outlet Node Name
+  <%= system_name %> Chiller Heat Recovery Demand Branches,  !- Demand Side Branch List Name
+  <%= system_name %> Chiller Heat Recovery Demand Connectors,  !- Demand Side Connector List Name
+  Optimal;              !- Load Distribution Scheme
+
+<%# NOTE:  Availability manager added above because of problems seen with lack of a manager in the heat recovery loop (for chiller condenser heat recovery?).  %>
+
+SetpointManager:Scheduled,
+  <%= system_name %> Chiller Heat Recovery Setpoint Manager,  !- Name
+  Temperature,             !- Control Variable
+  <%= system_name %> Chiller Heat Recovery Supply Temperature Schedule,  !- Schedule Name
+  <%= system_name %> Chiller Heat Recovery Setpoint Nodes;  !- Setpoint Node or NodeList Name
+
+Schedule:Constant,
+  <%= system_name %> Chiller Heat Recovery Supply Temperature Schedule,  !- Name
+  Temperature,             !- Schedule Type Limits Name
+  <%= chiller_hr_temp %>;  !- Hourly Value
+
+NodeList,
+  <%= system_name %> Chiller Heat Recovery Setpoint Nodes,  !- Name
+  <%= system_name %> Chiller Heat Recovery WaterHeater Source Side Outlet Node,
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Node;  !- Node 1 Name
+
+CondenserEquipmentOperationSchemes,
+  <%= system_name %> Chiller Heat Recovery Operation Scheme List,  !- Name
+  PlantEquipmentOperation:Uncontrolled,  !- Control Scheme 1 Object Type
+  <%= system_name %> Chiller Heat Recovery Operation Scheme,  !- Control Scheme 1 Name
+  <%= system_name %> Operation Schedule;  !- Control Scheme 1 Schedule Name
+
+PlantEquipmentOperation:Uncontrolled,
+  <%= system_name %> Chiller Heat Recovery Operation Scheme,  !- Name
+  <%= system_name %> Chiller Heat Recovery Equipment List; !- Priority Control 1 Equipment List Name
+
+CondenserEquipmentList,
+  <%= system_name %> Chiller Heat Recovery Equipment List, !- Name
+  WaterHeater:Mixed,    !- Equipment 1 Object Type
+  <%= system_name %> Chiller Heat Recovery WaterHeater;        !- Equipment 1 Name
+
+ConnectorList,
+  <%= system_name %> Chiller Heat Recovery Supply Connectors,  !- Name
+  Connector:Splitter,      !- Connector 1 Object Type
+  <%= system_name %> Chiller Heat Recovery Supply Splitter,  !- Connector 1 Name
+  Connector:Mixer,         !- Connector 2 Object Type
+  <%= system_name %> Chiller Heat Recovery Supply Mixer;  !- Connector 2 Name
+
+Connector:Splitter,
+  <%= system_name %> Chiller Heat Recovery Supply Splitter,  !- Name
+  <%= system_name %> Chiller Heat Recovery Supply Inlet Branch,  !- Inlet Branch Name
+  <%= system_name %> Chiller Heat Recovery Supply Equipment Branch;  !- Outlet Branch 2 Name
+
+Connector:Mixer,
+  <%= system_name %> Chiller Heat Recovery Supply Mixer,  !- Name
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Branch,  !- Outlet Branch Name
+  <%= system_name %> Chiller Heat Recovery Supply Equipment Branch;  !- Inlet Branch 2 Name
+
+BranchList,
+  <%= system_name %> Chiller Heat Recovery Supply Branches,  !- Name
+  <%= system_name %> Chiller Heat Recovery Supply Inlet Branch,  !- Branch 1 Name
+  <%= system_name %> Chiller Heat Recovery Supply Equipment Branch,  !- Branch 2 Name
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Branch;  !- Branch 4 Name
+
+Branch,
+  <%= system_name %> Chiller Heat Recovery Supply Inlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pump:VariableSpeed,      !- Component 1 Object Type
+  <%= system_name %> Chiller Heat Recovery Pump,    !- Component 1 Name
+  <%= system_name %> Chiller Heat Recovery Pump Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Pump Outlet Node;  !- Component 1 Outlet Node Name
+
+Pump:VariableSpeed,
+  <%= system_name %> Chiller Heat Recovery Pump,    !- Name
+  <%= system_name %> Chiller Heat Recovery Pump Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Pump Outlet Node,  !- Outlet Node Name
+  <%= design_flow %>,  !- Rated Flow Rate {m3/s}
+  <%= pump_head %>,  !- Rated Pump Head {Pa}
+  <%= pump_power %>,  !- Rated Power Consumption {W}
+  <%= pump_eff %>,  !- Motor Efficiency
+  0.0,                     !- Fraction of Motor Inefficiencies to Fluid Stream
+  0,                       !- Coefficient 1 of the Part Load Performance Curve
+  1,                       !- Coefficient 2 of the Part Load Performance Curve
+  0,                       !- Coefficient 3 of the Part Load Performance Curve
+  0,                       !- Coefficient 4 of the Part Load Performance Curve
+  0.0,                     !- Minimum Flow Rate {m3/s}
+  Intermittent;            !- Pump Control Type
+
+Branch,
+  <%= system_name %> Chiller Heat Recovery Supply Equipment Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  WaterHeater:Mixed,         !- Component 1 Object Type
+  <%= system_name %> Chiller Heat Recovery WaterHeater,   !- Component 1 Name
+  <%= system_name %> Chiller Heat Recovery WaterHeater Source Side Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery WaterHeater Source Side Outlet Node;  !- Component 1 Outlet Node Name
+
+WaterHeater:Mixed,
+  <%= system_name %> Chiller Heat Recovery WaterHeater,        !- Name
+  0.01,                     !- Tank Volume {m3}
+  <%= system_name %> Chiller Heat Recovery WaterHeater Temperature Schedule,   !- Setpoint Temperature Schedule Name
+  5.0,                     !- Deadband Temperature Difference {deltaC}
+  <%= chiller_hr_temp %>,                 !- Maximum Temperature Limit {C}
+  CYCLE,                   !- Heater Control Type
+  0,                   !- Heater Maximum Capacity {W}
+  ,                        !- Heater Minimum Capacity {W}
+  ,                        !- Heater Ignition Minimum Flow Rate {m3/s}
+  ,                        !- Heater Ignition Delay {s}
+  ELECTRIC,                !- Heater Fuel Type
+  1.0,                     !- Heater Thermal Efficiency
+  ,                        !- Part Load Factor Curve Name
+  ,                        !- Off Cycle Parasitic Fuel Consumption Rate {W}
+  ,                        !- Off Cycle Parasitic Fuel Type
+  ,                        !- Off Cycle Parasitic Heat Fraction to Tank
+  ,                        !- On Cycle Parasitic Fuel Consumption Rate {W}
+  ,                        !- On Cycle Parasitic Fuel Type
+  ,                        !- On Cycle Parasitic Heat Fraction to Tank
+  SCHEDULE,                !- Ambient Temperature Indicator
+  Hot Water Ambient Temperature Schedule,  !- Ambient Temperature Schedule Name
+  ,                        !- Ambient Temperature Zone Name
+  ,                        !- Ambient Temperature Outdoor Air Node Name
+  5.0,                    !- Off Cycle Loss Coefficient to Ambient Temperature {W/K}
+  ,                        !- Off Cycle Loss Fraction to Zone
+  5.0,                    !- On Cycle Loss Coefficient to Ambient Temperature {W/K}
+  ,                        !- On Cycle Loss Fraction to Zone
+  ,                        !- Peak Use Flow Rate {m3/s}
+  ,                        !- Use Flow Rate Fraction Schedule Name
+  ,                        !- Cold Water Supply Temperature Schedule Name
+  <%= system_name %> Pump Outlet Node,  !- Use Side Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery WaterHeater Use Side Outlet Node,  !- Use Side Outlet Node Name
+  1.0,                     !- Use Side Effectiveness
+  <%= system_name %> Chiller Heat Recovery WaterHeater Source Side Inlet Node,  !- Source Side Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery WaterHeater Source Side Outlet Node,  !- Source Side Outlet Node Name
+  1.0,                     !- Source Side Effectiveness
+  Autosize,                  !- Use Side Design Flow Rate {m3/s} Autosize
+  Autosize,                 !- Source Side Design Flow Rate {m3/s} Autosize
+  ,                 !- Indirect Water Heating Recovery Time
+  IndirectHeatPrimarySetpoint;                 !- Source Side Flow Control Mode
+
+Schedule:Constant,
+  <%= system_name %> Chiller Heat Recovery WaterHeater Temperature Schedule,  !- Name
+  Temperature,             !- Schedule Type Limits Name
+  <%= chiller_hr_temp %>;  !- Hourly Value
+
+Schedule:Compact,
+  Hot Water Ambient Temperature Schedule,  !- Name
+  Any Number,              !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 24:00,22;      !- Field 3
+
+Branch,
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  <%= system_name %> Chiller Heat Recovery Supply Exit Pipe,  !- Component 1 Name
+  <%= system_name %> Chiller Heat Recovery Supply Exit Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  <%= system_name %> Chiller Heat Recovery Supply Exit Pipe,  !- Name
+  <%= system_name %> Chiller Heat Recovery Supply Exit Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Supply Outlet Node;  !- Outlet Node Name
+
+ConnectorList,
+  <%= system_name %> Chiller Heat Recovery Demand Connectors,  !- Name
+  Connector:Splitter,      !- Connector 1 Object Type
+  <%= system_name %> Chiller Heat Recovery Demand Splitter,  !- Connector 1 Name
+  Connector:Mixer,         !- Connector 2 Object Type
+  <%= system_name %> Chiller Heat Recovery Demand Mixer;  !- Connector 2 Name
+
+Connector:Splitter,
+  <%= system_name %> Chiller Heat Recovery Demand Splitter,  !- Name
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Branch,  !- Inlet Branch Name
+  <%= system_name %> Chiller Heat Recovery Demand Equipment Branch;  !- Outlet Branch 2 Name
+
+Connector:Mixer,
+  <%= system_name %> Chiller Heat Recovery Demand Mixer,  !- Name
+  <%= system_name %> Chiller Heat Recovery Demand Outlet Branch,  !- Outlet Branch Name
+  <%= system_name %> Chiller Heat Recovery Demand Equipment Branch;  !- Inlet Branch 2 Name
+
+BranchList,
+  <%= system_name %> Chiller Heat Recovery Demand Branches,  !- Name
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Branch,  !- Branch 1 Name
+  <%= system_name %> Chiller Heat Recovery Demand Equipment Branch,  !- Branch 2 Name
+  <%= system_name %> Chiller Heat Recovery Demand Outlet Branch;  !- Branch 4 Name
+
+Branch,
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Pipe,  !- Component 1 Name
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Pipe Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Pipe,  !- Name
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Demand Inlet Pipe Outlet Node;  !- Outlet Node Name
+
+<% if (chiller_cond_hr) %>
+Branch,
+  <%= system_name %> Chiller Heat Recovery Demand Equipment Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Chiller:Electric:EIR,      !- Component 1 Object Type
+  Heat Recovery Chiller,           !- Component 1 Name
+  Heat Recovery Chiller Demand Inlet Node,  !- Component 1 Inlet Node Name
+  Heat Recovery Chiller Chiller Outlet Node;  !- Component 1 Outlet Node Name
+<% elsif (chiller_heatpump_hr) %>
+Branch,
+  <%= system_name %> Chiller Heat Recovery Demand Equipment Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  HeatPump:WaterToWater:EquationFit:Cooling,         !- Component 1 Object Type
+  Heat Recovery Chiller,   !- Component 1 Name
+  Heat Recovery Chiller Demand Inlet Node,  !- Component 1 Inlet Node Name
+  Heat Recovery Chiller Chiller Outlet Node;  !- Component 1 Outlet Node Name
+<% end %>
+
+Branch,
+  <%= system_name %> Chiller Heat Recovery Demand Outlet Branch,  !- Name
+  ,                        !- Pressure Drop Curve Name
+  Pipe:Adiabatic,          !- Component 1 Object Type
+  <%= system_name %> Chiller Heat Recovery Demand Exit Pipe,  !- Component 1 Name
+  <%= system_name %> Chiller Heat Recovery Demand Exit Pipe Inlet Node,  !- Component 1 Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Demand Outlet Node;  !- Component 1 Outlet Node Name
+
+Pipe:Adiabatic,
+  <%= system_name %> Chiller Heat Recovery Demand Exit Pipe,  !- Name
+  <%= system_name %> Chiller Heat Recovery Demand Exit Pipe Inlet Node,  !- Inlet Node Name
+  <%= system_name %> Chiller Heat Recovery Demand Outlet Node;  !- Outlet Node Name
