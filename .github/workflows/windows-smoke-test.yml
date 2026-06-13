@@ -1,1 +1,32 @@
+name: Windows smoke test
 
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-smoke-test:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install genEPJ
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
+      - name: Run installation smoke tests
+        run: |
+          python -m pytest tests/test_installation.py -q
+
+      - name: Run tiny-home check_model smoke check
+        run: |
+          python -m genEPJ.standalone.check_model examples\sim-tinyhome\nomad_3RV96.idf
